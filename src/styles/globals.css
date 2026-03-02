@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 190 78% 98%;
+  --foreground: 197 70% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 197 70% 14%;
+  --border: 186 40% 82%;
+  --input: 186 40% 86%;
+  --primary: 180 73% 43%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 185 69% 92%;
+  --secondary-foreground: 197 70% 16%;
+  --muted: 188 45% 92%;
+  --muted-foreground: 193 24% 38%;
+}
+
+.dark {
+  --background: 199 42% 8%;
+  --foreground: 186 66% 94%;
+  --card: 201 37% 12%;
+  --card-foreground: 186 66% 94%;
+  --border: 191 35% 24%;
+  --input: 191 35% 22%;
+  --primary: 180 68% 46%;
+  --primary-foreground: 199 42% 8%;
+  --secondary: 190 28% 18%;
+  --secondary-foreground: 183 64% 90%;
+  --muted: 195 24% 16%;
+  --muted-foreground: 186 25% 70%;
+}
+
+body {
+  font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  background: radial-gradient(circle at 0% 0%, rgba(49, 203, 191, 0.16), transparent 36%),
+    radial-gradient(circle at 90% 20%, rgba(52, 171, 192, 0.2), transparent 44%),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  min-height: 100vh;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+.panel-glow {
+  box-shadow: 0 10px 38px rgba(16, 74, 78, 0.14);
+}
