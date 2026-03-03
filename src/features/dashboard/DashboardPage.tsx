@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
+import { RefreshCw } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -43,6 +44,11 @@ export function DashboardPage() {
   const [error, setError] = useState("");
   const [selectedBotId, setSelectedBotId] = useState<number | null>(null);
   const [networkSeries, setNetworkSeries] = useState<NetworkPoint[]>([]);
+  const [saying, setSaying] = useState("愿每一次启动都带来新的灵感。");
+  const [sayingLoading, setSayingLoading] = useState(false);
+  const [sayingVisible, setSayingVisible] = useState(true);
+  const [displaySaying, setDisplaySaying] =
+    useState("愿每一次启动都带来新的灵感。");
   const { setLeftContent } = useTopbar();
 
   const appendNetworkPoint = (nextOverview: any) => {
@@ -80,8 +86,29 @@ export function DashboardPage() {
     }
   };
 
+  const refreshSaying = async () => {
+    if (sayingLoading) return;
+    setSayingLoading(true);
+    setSayingVisible(false);
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    try {
+      const res = await apiFetch<any>("/api/saying");
+      const newSaying = res?.data?.text || "愿每一次启动都带来新的灵感。";
+      setSaying(newSaying);
+      setDisplaySaying(newSaying);
+    } catch {
+      setSayingVisible(true);
+    } finally {
+      setSayingVisible(true);
+      setTimeout(() => setSayingLoading(false), 300);
+    }
+  };
+
   useEffect(() => {
     load().then();
+    refreshSaying().then();
     const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
   }, []);
@@ -140,8 +167,6 @@ export function DashboardPage() {
 
   const system = overview?.system;
   const versions = overview?.versions;
-  const saying = overview?.saying?.text || "愿每一次启动都带来新的灵感。";
-
   return (
     <div className="space-y-4 animate-soft-pop">
       {selectedBot ? (
@@ -295,12 +320,30 @@ export function DashboardPage() {
         </Card>
       </section>
 
-      <Card>
-        <CardHeader>
+      <Card
+        className={`cursor-pointer select-none transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${
+          sayingLoading ? "ring-1 ring-primary/40" : ""
+        }`}
+        onClick={() => refreshSaying()}
+      >
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>一言</CardTitle>
+          <RefreshCw
+            className={`h-4 w-4 text-primary transition-all duration-500 ${
+              sayingLoading ? "animate-spin" : "hover:rotate-180"
+            }`}
+          />
         </CardHeader>
-        <CardContent>
-          <p className="text-sm leading-7">{saying}</p>
+        <CardContent className="relative min-h-[60px] overflow-hidden">
+          <div
+            className={`transition-all duration-300 ease-out ${
+              sayingVisible
+                ? "translate-y-0 opacity-100"
+                : "translate-y-4 opacity-0"
+            }`}
+          >
+            <p className="text-sm leading-7">{displaySaying}</p>
+          </div>
           {error ? (
             <p className="mt-2 text-xs text-red-500">
               部分数据加载失败: {error}
