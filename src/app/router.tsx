@@ -13,6 +13,9 @@ const PluginConfigPage = lazy(() =>
   import("@/features/plugin-config/PluginConfigPage").then((m) => ({ default: m.PluginConfigPage })),
 );
 const DatabasePage = lazy(() => import("@/features/database/DatabasePage").then((m) => ({ default: m.DatabasePage })));
+const WebUIManagePage = lazy(() =>
+  import("@/features/webui/WebUIManagePage").then((m) => ({ default: m.WebUIManagePage })),
+);
 
 function Protected({ children }: { children: ReactNode }) {
   const token = getAuthToken();
@@ -88,6 +91,14 @@ export const router = createBrowserRouter([
         element: (
           <LazyWrap>
             <DatabasePage />
+          </LazyWrap>
+        ),
+      },
+      {
+        path: "webui",
+        element: (
+          <LazyWrap>
+            <WebUIManagePage />
           </LazyWrap>
         ),
       },

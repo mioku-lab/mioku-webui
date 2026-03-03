@@ -1,4 +1,4 @@
-import { Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
@@ -10,6 +10,7 @@ function resolveAutoTheme(): "light" | "dark" {
 
 export function ThemeToggle() {
   const [mode, setMode] = useState<ThemeMode>((localStorage.getItem("mioku_theme_mode") as ThemeMode) || "auto");
+  const nextMode = mode === "auto" ? "light" : mode === "light" ? "dark" : "auto";
 
   useEffect(() => {
     const apply = (target: ThemeMode) => {
@@ -25,13 +26,19 @@ export function ThemeToggle() {
     return () => media.removeEventListener("change", listener);
   }, [mode]);
 
+  const icon = mode === "light" ? <Sun className="h-4 w-4" /> : mode === "dark" ? <Moon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />;
+  const title = mode === "light" ? "当前: 日间模式，点击切换到夜间" : mode === "dark" ? "当前: 夜间模式，点击切换到自动" : "当前: 自动模式，点击切换到日间";
+
   return (
-    <div className="flex items-center gap-2">
-      <Button variant={mode === "light" ? "default" : "secondary"} size="sm" onClick={() => setMode("light")}>日间</Button>
-      <Button variant={mode === "dark" ? "default" : "secondary"} size="sm" onClick={() => setMode("dark")}>夜间</Button>
-      <Button variant={mode === "auto" ? "default" : "secondary"} size="sm" onClick={() => setMode("auto")}>
-        {mode === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />} 自动
-      </Button>
-    </div>
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={() => setMode(nextMode)}
+      title={title}
+      aria-label={title}
+      className="transition-all duration-300 hover:-translate-y-0.5"
+    >
+      <span className="animate-soft-pop">{icon}</span>
+    </Button>
   );
 }

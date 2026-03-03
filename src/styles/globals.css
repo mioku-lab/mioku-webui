@@ -48,3 +48,29 @@ body {
 .panel-glow {
   box-shadow: 0 10px 38px rgba(16, 74, 78, 0.14);
 }
+
+.topbar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary)) transparent;
+}
+
+.topbar-scroll::-webkit-scrollbar {
+  height: 7px;
+}
+
+.topbar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.topbar-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(90deg, hsl(var(--primary) / 0.9), hsl(var(--primary) / 0.55));
+}
+
+.topbar-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7));
+}
+
+.topbar-chip {
+  transform-origin: center;
+}
