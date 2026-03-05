@@ -321,9 +321,7 @@ export function DashboardPage() {
       </section>
 
       <Card
-        className={`cursor-pointer select-none transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${
-          sayingLoading ? "ring-1 ring-primary/40" : ""
-        }`}
+        className={`cursor-pointer select-none transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md`}
         onClick={() => refreshSaying()}
       >
         <CardHeader className="flex flex-row items-center justify-between">

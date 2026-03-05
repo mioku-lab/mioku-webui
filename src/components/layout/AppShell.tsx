@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
@@ -19,15 +19,86 @@ const navItems = [
 export function AppShell() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [topbarMode, setTopbarMode] = useState<"initial" | "island" | "hidden">(
+    "initial",
+  );
+  const [compactWidth, setCompactWidth] = useState<number>(760);
   const [leftContent, setLeftContent] = useState<ReactNode>(null);
-  const topbarValue = useMemo(() => ({ leftContent, setLeftContent }), [leftContent]);
+  const lastScrollYRef = useRef(0);
+  const topbarModeRef = useRef<"initial" | "island" | "hidden">("initial");
+  const islandEnterYRef = useRef(0);
+  const maxWidthRef = useRef<HTMLDivElement | null>(null);
+  const leftSlotRef = useRef<HTMLDivElement | null>(null);
+  const rightSlotRef = useRef<HTMLDivElement | null>(null);
+  const topbarValue = useMemo(
+    () => ({ leftContent, setLeftContent }),
+    [leftContent],
+  );
+
+  const calcCompactWidth = useCallback(() => {
+    const layoutWidth = maxWidthRef.current?.clientWidth || window.innerWidth;
+    const viewportWidth = window.innerWidth;
+    const oneThird = Math.floor(viewportWidth / 3);
+    const next = Math.min(layoutWidth, oneThird);
+    setCompactWidth((prev) => (Math.abs(prev - next) > 2 ? next : prev));
+  }, []);
+
+  useEffect(() => {
+    topbarModeRef.current = topbarMode;
+  }, [topbarMode]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const currentY = window.scrollY;
+      const delta = currentY - lastScrollYRef.current;
+      const mode = topbarModeRef.current;
+
+      if (currentY < 16) {
+        if (mode !== "initial") setTopbarMode("initial");
+      } else if (delta > 3) {
+        if (mode === "initial") {
+          islandEnterYRef.current = currentY;
+          setTopbarMode("island");
+        } else if (mode === "island" && currentY - islandEnterYRef.current > 56) {
+          setTopbarMode("hidden");
+        }
+      } else if (delta < -3) {
+        if (mode === "hidden") {
+          islandEnterYRef.current = currentY;
+          setTopbarMode("island");
+        }
+      }
+
+      lastScrollYRef.current = currentY;
+    };
+
+    calcCompactWidth();
+    const resizeObserver = new ResizeObserver(() => calcCompactWidth());
+    if (maxWidthRef.current) resizeObserver.observe(maxWidthRef.current);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", calcCompactWidth, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", calcCompactWidth);
+      resizeObserver.disconnect();
+    };
+  }, [calcCompactWidth]);
+
+  useEffect(() => {
+    const raf = window.requestAnimationFrame(() => {
+      calcCompactWidth();
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [calcCompactWidth, location.pathname, leftContent]);
 
   return (
     <TopbarContext.Provider value={topbarValue}>
       <div className="min-h-screen w-full p-3 md:p-6">
         <div
           className={`fixed inset-0 z-30 bg-black/45 transition-opacity duration-300 md:hidden ${
-            mobileMenuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+            mobileMenuOpen
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
           }`}
           onClick={() => setMobileMenuOpen(false)}
         />
@@ -37,10 +108,19 @@ export function AppShell() {
           }`}
         >
           <div className="mb-5 flex items-center justify-between">
-            <Link to="/" onClick={() => setMobileMenuOpen(false)} className="text-lg font-bold text-primary">
+            <Link
+              to="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-lg font-bold text-primary"
+            >
               Mioku WebUI
             </Link>
-            <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(false)} aria-label="关闭菜单">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="关闭菜单"
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -62,44 +142,72 @@ export function AppShell() {
         </aside>
 
         <div className="mx-auto grid max-w-7xl grid-cols-1 gap-3 md:grid-cols-[240px_minmax(0,1fr)] md:gap-6">
-          <aside className="hidden rounded-xl border bg-card p-4 panel-glow animate-soft-pop md:block">
-            <Link to="/" className="mb-5 block text-lg font-bold text-primary">Mioku WebUI</Link>
-            <div className="space-y-1">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === "/"}
-                  className={({ isActive }) =>
-                    `block rounded-md px-3 py-2 text-sm transition ${isActive ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`
-                  }
+          <aside className="hidden md:block">
+            <div className="topbar-scroll sticky top-6 h-[calc(100vh-3rem)] overflow-y-auto rounded-xl border bg-card p-3 panel-glow animate-soft-pop">
+              <div className="sticky top-0 z-10 bg-card/95 pb-3 pt-1 backdrop-blur">
+                <Link
+                  to="/"
+                  className="block rounded-lg px-2 py-1 text-lg font-bold text-primary"
                 >
-                  {item.label}
-                </NavLink>
-              ))}
+                  Mioku WebUI
+                </Link>
+              </div>
+              <div className="space-y-1">
+                {navItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === "/"}
+                    className={({ isActive }) =>
+                      `block rounded-md px-3 py-2 text-sm transition ${isActive ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
             </div>
           </aside>
 
-          <main className="space-y-3 md:space-y-5">
-            <header className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4 panel-glow animate-soft-pop">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="md:hidden"
-                  onClick={() => setMobileMenuOpen(true)}
-                  aria-label="打开菜单"
+          <main ref={maxWidthRef} className="space-y-3 md:space-y-5">
+            <div className="sticky top-3 z-20 flex justify-center">
+              <header
+                className={`flex items-center justify-between gap-3 border bg-card panel-glow animate-soft-pop transition-all duration-500 ease-[cubic-bezier(0.2,0.9,0.3,1.1)] motion-reduce:transition-none ${
+                  topbarMode === "initial"
+                    ? "translate-y-0 rounded-xl p-4"
+                    : topbarMode === "island"
+                      ? "translate-y-2 rounded-2xl px-4 py-2.5 shadow-xl shadow-black/10 backdrop-blur-md"
+                      : "-translate-y-[140%] rounded-2xl px-4 py-2.5 opacity-0 pointer-events-none"
+                }`}
+                style={{
+                  width: topbarMode === "initial" ? "100%" : `${compactWidth}px`,
+                  maxWidth: "100%",
+                }}
+              >
+                <div
+                  ref={leftSlotRef}
+                  className="flex min-w-0 flex-1 items-center gap-2"
                 >
-                  <Menu className="h-4 w-4" />
-                </Button>
-                <div className="topbar-scroll flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
-                  <div key={location.pathname} className="animate-soft-pop">
-                    {leftContent}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="md:hidden"
+                    onClick={() => setMobileMenuOpen(true)}
+                    aria-label="打开菜单"
+                  >
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                  <div className="topbar-scroll flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+                    <div key={location.pathname} className="animate-soft-pop">
+                      {leftContent}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <ThemeToggle />
-            </header>
+                <div ref={rightSlotRef} className="shrink-0">
+                  <ThemeToggle />
+                </div>
+              </header>
+            </div>
             <Outlet />
           </main>
         </div>
