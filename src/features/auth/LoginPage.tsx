@@ -50,7 +50,12 @@ export function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-3">
-            <Input value={token} onChange={(e) => setTokenInput(e.target.value)} placeholder="输入密钥" />
+            <Input
+              type="password"
+              value={token}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="输入密钥"
+            />
             {error ? <p className="text-sm text-red-500">{error}</p> : null}
             <Button className="w-full" disabled={loading}>{loading ? "登录中..." : "登录"}</Button>
           </form>
