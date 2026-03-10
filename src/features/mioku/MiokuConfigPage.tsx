@@ -35,8 +35,8 @@ type ConfigTab = "owners" | "admins" | "napcat" | "plugins" | "webui";
 const tabLabels: Record<ConfigTab, string> = {
   owners: "主人配置",
   admins: "管理员配置",
-  napcat: "NapCat配置",
-  plugins: "插件配置",
+  napcat: "Onebot配置",
+  plugins: "插件开关",
   webui: "WebUI配置",
 };
 
@@ -72,11 +72,26 @@ export function MiokuConfigPage() {
         apiFetch<{ data: WebUISettings }>("/api/settings"),
         apiFetch<{ data: string[] }>("/api/config/plugins/available"),
       ]);
-      const config = miokuRes.data || { owners: [], admins: [], napcat: [], plugins: [] };
+      const config = miokuRes.data || {
+        owners: [],
+        admins: [],
+        napcat: [],
+        plugins: [],
+      };
       setMiokuConfig(config);
-      setWebuiSettings(webuiRes.data || { port: 3339, host: "0.0.0.0", packageManager: "bun", autoOpen: false });
+      setWebuiSettings(
+        webuiRes.data || {
+          port: 3339,
+          host: "0.0.0.0",
+          packageManager: "bun",
+          autoOpen: false,
+        },
+      );
       setAvailablePlugins(pluginsRes.data || []);
-      initialConfigRef.current = JSON.stringify({ mioku: config, webui: webuiRes.data });
+      initialConfigRef.current = JSON.stringify({
+        mioku: config,
+        webui: webuiRes.data,
+      });
     } catch {
       toast.error("加载配置失败");
     } finally {
@@ -89,7 +104,10 @@ export function MiokuConfigPage() {
   }, []);
 
   useEffect(() => {
-    const current = JSON.stringify({ mioku: miokuConfig, webui: webuiSettings });
+    const current = JSON.stringify({
+      mioku: miokuConfig,
+      webui: webuiSettings,
+    });
     setHasChanges(current !== initialConfigRef.current);
   }, [miokuConfig, webuiSettings]);
 
@@ -138,7 +156,10 @@ export function MiokuConfigPage() {
         }),
       ]);
       toast.success("配置保存成功");
-      initialConfigRef.current = JSON.stringify({ mioku: miokuConfig, webui: webuiSettings });
+      initialConfigRef.current = JSON.stringify({
+        mioku: miokuConfig,
+        webui: webuiSettings,
+      });
       setHasChanges(false);
     } catch {
       toast.error("保存失败");
@@ -200,7 +221,11 @@ export function MiokuConfigPage() {
     }));
   };
 
-  const updateNapCat = (index: number, field: keyof NapCatConfig, value: string | number) => {
+  const updateNapCat = (
+    index: number,
+    field: keyof NapCatConfig,
+    value: string | number,
+  ) => {
     setMiokuConfig((prev) => ({
       ...prev,
       napcat: prev.napcat.map((n, i) =>
@@ -233,14 +258,18 @@ export function MiokuConfigPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {miokuConfig.owners.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无主人，点击右上角添加</p>
+              <p className="text-sm text-muted-foreground">
+                暂无主人，点击右上角添加
+              </p>
             ) : (
               miokuConfig.owners.map((owner, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <Input
                     type="number"
                     value={owner || ""}
-                    onChange={(e) => updateOwner(index, parseInt(e.target.value) || 0)}
+                    onChange={(e) =>
+                      updateOwner(index, parseInt(e.target.value) || 0)
+                    }
                     placeholder="QQ 号"
                     className="flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
@@ -269,14 +298,18 @@ export function MiokuConfigPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {miokuConfig.admins.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无管理员，点击右上角添加</p>
+              <p className="text-sm text-muted-foreground">
+                暂无管理员，点击右上角添加
+              </p>
             ) : (
               miokuConfig.admins.map((admin, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <Input
                     type="number"
                     value={admin || ""}
-                    onChange={(e) => updateAdmin(index, parseInt(e.target.value) || 0)}
+                    onChange={(e) =>
+                      updateAdmin(index, parseInt(e.target.value) || 0)
+                    }
                     placeholder="QQ 号"
                     className="flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
@@ -298,20 +331,19 @@ export function MiokuConfigPage() {
       {activeTab === "napcat" && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>NapCat 账号配置</CardTitle>
+            <CardTitle>NapCat/Onebot 实例配置</CardTitle>
             <Button variant="outline" size="sm" onClick={addNapCat}>
               <Plus className="h-4 w-4" />
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             {miokuConfig.napcat.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无 NapCat 实例，点击右上角添加</p>
+              <p className="text-sm text-muted-foreground">
+                暂无实例，点击右上角添加
+              </p>
             ) : (
               miokuConfig.napcat.map((napcat, index) => (
-                <div
-                  key={index}
-                  className="space-y-2 rounded-lg border p-3"
-                >
+                <div key={index} className="space-y-2 rounded-lg border p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">
                       {napcat.name || `实例 ${index + 1}`}
@@ -328,33 +360,47 @@ export function MiokuConfigPage() {
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                     <Input
                       value={napcat.name}
-                      onChange={(e) => updateNapCat(index, "name", e.target.value)}
+                      onChange={(e) =>
+                        updateNapCat(index, "name", e.target.value)
+                      }
                       placeholder="实例名称"
                     />
                     <select
                       className="form-select"
                       value={napcat.protocol}
-                      onChange={(e) => updateNapCat(index, "protocol", e.target.value)}
+                      onChange={(e) =>
+                        updateNapCat(index, "protocol", e.target.value)
+                      }
                     >
                       <option value="ws">ws</option>
                       <option value="wss">wss</option>
                     </select>
                     <Input
                       value={napcat.host}
-                      onChange={(e) => updateNapCat(index, "host", e.target.value)}
+                      onChange={(e) =>
+                        updateNapCat(index, "host", e.target.value)
+                      }
                       placeholder="主机地址"
                     />
                     <Input
                       type="number"
                       value={napcat.port}
-                      onChange={(e) => updateNapCat(index, "port", parseInt(e.target.value) || 0)}
+                      onChange={(e) =>
+                        updateNapCat(
+                          index,
+                          "port",
+                          parseInt(e.target.value) || 0,
+                        )
+                      }
                       placeholder="端口"
                       className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <Input
                       type="password"
                       value={napcat.token}
-                      onChange={(e) => updateNapCat(index, "token", e.target.value)}
+                      onChange={(e) =>
+                        updateNapCat(index, "token", e.target.value)
+                      }
                       placeholder="Token"
                       className="md:col-span-2"
                     />
@@ -369,7 +415,7 @@ export function MiokuConfigPage() {
       {activeTab === "plugins" && (
         <Card>
           <CardHeader>
-            <CardTitle>插件配置</CardTitle>
+            <CardTitle>插件开关</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {availablePlugins.length === 0 ? (
@@ -421,12 +467,17 @@ export function MiokuConfigPage() {
                 <Input
                   value={webuiSettings.host}
                   onChange={(e) =>
-                    setWebuiSettings((prev) => ({ ...prev, host: e.target.value }))
+                    setWebuiSettings((prev) => ({
+                      ...prev,
+                      host: e.target.value,
+                    }))
                   }
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">包管理器</label>
+                <label className="text-xs text-muted-foreground">
+                  包管理器
+                </label>
                 <select
                   className="form-select w-full"
                   value={webuiSettings.packageManager}

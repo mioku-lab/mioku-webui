@@ -52,6 +52,26 @@
     box-shadow: 0 10px 38px rgba(16, 74, 78, 0.14);
   }
 
+  [data-sonner-toast][data-type="success"] {
+    background: hsl(var(--card)) !important;
+    border-color: hsl(142 76% 36% / 0.3) !important;
+  }
+
+  [data-sonner-toast][data-type="error"] {
+    background: hsl(var(--card)) !important;
+    border-color: hsl(0 84% 60% / 0.3) !important;
+  }
+
+  [data-sonner-toast][data-type="warning"] {
+    background: hsl(var(--card)) !important;
+    border-color: hsl(45 93% 47% / 0.3) !important;
+  }
+
+  [data-sonner-toast][data-type="info"] {
+    background: hsl(var(--card)) !important;
+    border-color: hsl(200 98% 48% / 0.3) !important;
+  }
+
   select.form-select {
     appearance: none !important;
     -webkit-appearance: none !important;

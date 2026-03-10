@@ -44,9 +44,16 @@ export function AppShell() {
   const calcCompactWidth = useCallback(() => {
     const layoutWidth = maxWidthRef.current?.clientWidth || window.innerWidth;
     const viewportWidth = window.innerWidth;
-    const oneThird = Math.floor(viewportWidth / 3);
-    const next = Math.min(layoutWidth, oneThird);
-    setCompactWidth((prev) => (Math.abs(prev - next) > 2 ? next : prev));
+    const isMobile = viewportWidth < 768;
+
+    if (isMobile) {
+      const next = layoutWidth + 24;
+      setCompactWidth((prev) => (Math.abs(prev - next) > 2 ? next : prev));
+    } else {
+      const oneThird = Math.floor(viewportWidth / 3);
+      const next = Math.min(layoutWidth, oneThird);
+      setCompactWidth((prev) => (Math.abs(prev - next) > 2 ? next : prev));
+    }
   }, []);
 
   useEffect(() => {
@@ -163,7 +170,7 @@ export function AppShell() {
           </div>
         </aside>
 
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-3 md:grid-cols-[240px_minmax(0,1fr)] md:gap-6">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-3 px-3 md:grid-cols-[240px_minmax(0,1fr)] md:gap-6 md:px-0">
           <aside className="hidden md:block">
             <div className="topbar-scroll sticky top-6 h-[calc(100vh-3rem)] overflow-y-auto rounded-xl border bg-card p-3 panel-glow animate-soft-pop">
               <div className="sticky top-0 z-10 bg-card/95 pb-3 pt-1 backdrop-blur">
@@ -191,19 +198,20 @@ export function AppShell() {
             </div>
           </aside>
 
-          <main ref={maxWidthRef} className="space-y-3 md:space-y-5">
-            <div className="sticky top-3 z-20 flex justify-center">
+          <main ref={maxWidthRef} className="space-y-3 px-3 md:space-y-5 md:px-0">
+            <div className="sticky top-3 z-20 flex justify-center md:px-0">
               <header
                 className={`flex items-center justify-between gap-3 border bg-card panel-glow animate-soft-pop transition-all duration-500 ease-[cubic-bezier(0.2,0.9,0.3,1.1)] motion-reduce:transition-none ${
                   topbarMode === "initial"
                     ? "translate-y-0 rounded-xl p-4"
                     : topbarMode === "island"
-                      ? "translate-y-2 rounded-2xl px-4 py-2.5 shadow-xl shadow-black/10 backdrop-blur-md"
+                      ? "translate-y-2 rounded-2xl px-4 py-2.5 shadow-xl shadow-black/10 backdrop-blur-md -mx-3 md:mx-0"
                       : "-translate-y-[140%] rounded-2xl px-4 py-2.5 opacity-0 pointer-events-none"
                 }`}
                 style={{
                   width: topbarMode === "initial" ? "100%" : `${compactWidth}px`,
-                  maxWidth: "100%",
+                  minWidth: "320px",
+                  maxWidth: topbarMode === "initial" ? "100%" : `${compactWidth}px`,
                 }}
               >
                 <div

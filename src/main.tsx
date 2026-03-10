@@ -22,12 +22,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           color: "hsl(var(--card-foreground))",
           borderColor: "hsl(var(--border))",
         },
-        classes: {
-          error: "!bg-red-500/10 !border-red-500/30",
-          warning: "!bg-yellow-500/10 !border-yellow-500/30",
-          success: "!bg-green-500/10 !border-green-500/30",
-          info: "!bg-blue-500/10 !border-blue-500/30",
-        },
       }}
     />
   </Provider>,
