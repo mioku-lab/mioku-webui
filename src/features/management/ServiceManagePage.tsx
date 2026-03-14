@@ -24,12 +24,12 @@ import { toast } from "@/lib/toast";
 type ViewMode = "overview" | "detail" | "install";
 type UpdateState = "up-to-date" | "has-updates" | "unknown" | "no-git";
 
-interface PluginOverviewItem {
+interface ServiceOverviewItem {
   name: string;
   version: string;
   description: string;
   hasGit: boolean;
-  isSystemPlugin?: boolean;
+  isSystemService?: boolean;
   repository?: string;
   requiredServices: string[];
   updateState: UpdateState;
@@ -38,17 +38,16 @@ interface PluginOverviewItem {
   updateError?: string;
 }
 
-interface PluginDetail {
+interface ServiceDetail {
   name: string;
   version: string;
   description: string;
   hasGit: boolean;
-  isSystemPlugin?: boolean;
+  isSystemService?: boolean;
   repository: string;
   originUrl: string;
   requiredServices: string[];
   missingServices: string[];
-  help: any;
   readme: string;
   readmeFile: string;
   updateState: UpdateState;
@@ -58,10 +57,10 @@ interface PluginDetail {
   updateError?: string;
 }
 
-function sortPlugins(items: PluginOverviewItem[]): PluginOverviewItem[] {
+function sortServices(items: ServiceOverviewItem[]): ServiceOverviewItem[] {
   return [...items].sort((a, b) => {
-    const sysA = a.isSystemPlugin ? 1 : 0;
-    const sysB = b.isSystemPlugin ? 1 : 0;
+    const sysA = a.isSystemService ? 1 : 0;
+    const sysB = b.isSystemService ? 1 : 0;
     if (sysA !== sysB) return sysB - sysA;
     return a.name.localeCompare(b.name, "zh-Hans-CN");
   });
@@ -107,59 +106,17 @@ function getUpdateBadge(state: UpdateState, behind: number) {
   );
 }
 
-function renderHelp(help: any) {
-  if (!help) {
-    return (
-      <p className="text-sm text-muted-foreground">该插件未提供帮助信息。</p>
-    );
-  }
-  const title = help?.title || help?.name || "插件帮助";
-  const description = help?.description || "";
-  const commands = Array.isArray(help?.commands) ? help.commands : [];
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <p className="text-sm font-semibold">{title}</p>
-        {description ? (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
-      {commands.length > 0 ? (
-        <div className="space-y-2">
-          {commands.map((command: any, index: number) => (
-            <div
-              key={`${command?.cmd || command}-${index}`}
-              className="rounded-lg border bg-secondary/20 p-3"
-            >
-              <p className="font-mono text-xs">
-                {command?.cmd || String(command)}
-              </p>
-              {command?.desc ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {command.desc}
-                </p>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-export function PluginManagePage() {
+export function ServiceManagePage() {
   const { setLeftContent, setRightContent } = useTopbar();
 
   const [mode, setMode] = useState<ViewMode>("overview");
-  const [plugins, setPlugins] = useState<PluginOverviewItem[]>([]);
+  const [services, setServices] = useState<ServiceOverviewItem[]>([]);
   const [selectedName, setSelectedName] = useState("");
-  const [detail, setDetail] = useState<PluginDetail | null>(null);
+  const [detail, setDetail] = useState<ServiceDetail | null>(null);
 
   const [repoUrlInput, setRepoUrlInput] = useState("");
   const [repoEditInput, setRepoEditInput] = useState("");
   const [installOutput, setInstallOutput] = useState("");
-
   const [missingServices, setMissingServices] = useState<string[]>([]);
 
   const [loadingOverview, setLoadingOverview] = useState(false);
@@ -173,11 +130,11 @@ export function PluginManagePage() {
   const loadOverview = async () => {
     setLoadingOverview(true);
     try {
-      const res = await apiFetch<{ ok: true; data: PluginOverviewItem[] }>(
-        "/api/manage/plugins/overview",
+      const res = await apiFetch<{ ok: true; data: ServiceOverviewItem[] }>(
+        "/api/manage/services/overview",
       );
-      const next = sortPlugins(res.data || []);
-      setPlugins(next);
+      const next = sortServices(res.data || []);
+      setServices(next);
 
       if (!selectedName && next[0]?.name) {
         setSelectedName(next[0].name);
@@ -189,7 +146,7 @@ export function PluginManagePage() {
       }
     } catch (error) {
       if (!(error instanceof Error)) {
-        toast.error("加载插件列表失败");
+        toast.error("加载服务列表失败");
       }
     } finally {
       setLoadingOverview(false);
@@ -200,14 +157,14 @@ export function PluginManagePage() {
     setLoadingDetail(true);
     setDetail(null);
     try {
-      const res = await apiFetch<{ ok: true; data: PluginDetail }>(
-        `/api/manage/plugins/${encodeURIComponent(name)}`,
+      const res = await apiFetch<{ ok: true; data: ServiceDetail }>(
+        `/api/manage/services/${encodeURIComponent(name)}`,
       );
       setDetail(res.data);
       setRepoEditInput(res.data.originUrl || res.data.repository || "");
     } catch (error) {
       if (!(error instanceof Error)) {
-        toast.error("加载插件详情失败");
+        toast.error("加载服务详情失败");
       }
     } finally {
       setLoadingDetail(false);
@@ -243,22 +200,22 @@ export function PluginManagePage() {
         >
           安装
         </button>
-        {plugins.map((plugin) => (
+        {services.map((service) => (
           <button
-            key={plugin.name}
+            key={service.name}
             type="button"
             onClick={() => {
-              setSelectedName(plugin.name);
+              setSelectedName(service.name);
               setMode("detail");
-              loadDetail(plugin.name).then();
+              loadDetail(service.name).then();
             }}
             className={`topbar-chip rounded-md px-2.5 py-1.5 text-xs transition-all duration-300 ${
-              mode === "detail" && selectedName === plugin.name
+              mode === "detail" && selectedName === service.name
                 ? "scale-105 bg-primary text-primary-foreground shadow-md"
                 : "bg-secondary text-secondary-foreground hover:-translate-y-0.5"
             }`}
           >
-            {plugin.name}
+            {service.name}
           </button>
         ))}
       </div>
@@ -269,14 +226,14 @@ export function PluginManagePage() {
       setLeftContent(null);
       setRightContent(null);
     };
-  }, [mode, plugins, selectedName, setLeftContent, setRightContent]);
+  }, [mode, services, selectedName, setLeftContent, setRightContent]);
 
-  const updatePlugin = async (name: string) => {
+  const updateService = async (name: string) => {
     setUpdatingName(name);
     try {
       await apiFetch("/api/manage/update", {
         method: "POST",
-        body: JSON.stringify({ name, target: "plugin" }),
+        body: JSON.stringify({ name, target: "service" }),
       });
       toast.success(`${name} 更新完成，请重启 Mioku`);
       await loadOverview();
@@ -292,15 +249,15 @@ export function PluginManagePage() {
     }
   };
 
-  const removePlugin = async (name: string) => {
-    const target = plugins.find((item) => item.name === name);
-    if (target?.isSystemPlugin) {
-      toast.warning(`${name} 是 system 插件，无法卸载`);
+  const removeService = async (name: string) => {
+    const target = services.find((item) => item.name === name);
+    if (target?.isSystemService) {
+      toast.warning(`${name} 是 system 服务，无法卸载`);
       return;
     }
 
     const ok = await confirm({
-      title: "卸载插件",
+      title: "卸载服务",
       message: `确认卸载 ${name} 吗？`,
       confirmText: "卸载",
       cancelText: "取消",
@@ -311,7 +268,7 @@ export function PluginManagePage() {
     try {
       await apiFetch("/api/manage/remove", {
         method: "POST",
-        body: JSON.stringify({ name, target: "plugin" }),
+        body: JSON.stringify({ name, target: "service" }),
       });
       toast.success(`${name} 已卸载，请重启 Mioku`);
       if (selectedName === name) {
@@ -328,12 +285,12 @@ export function PluginManagePage() {
     }
   };
 
-  const updateAllPlugins = async () => {
+  const updateAllServices = async () => {
     setUpdatingAll(true);
     try {
       const result = await apiFetch<any>("/api/manage/update-all", {
         method: "POST",
-        body: JSON.stringify({ target: "plugin" }),
+        body: JSON.stringify({ target: "service" }),
       });
       toast.success(
         `全部更新完成：更新 ${result.updatedCount || 0} 个，失败 ${result.failedCount || 0} 个，跳过 ${result.skippedCount || 0} 个`,
@@ -351,9 +308,9 @@ export function PluginManagePage() {
     }
   };
 
-  const installPlugin = async () => {
+  const installService = async () => {
     if (!repoUrlInput.trim()) {
-      toast.warning("请输入插件 Git 地址");
+      toast.warning("请输入服务 Git 地址");
       return;
     }
 
@@ -364,7 +321,7 @@ export function PluginManagePage() {
         method: "POST",
         body: JSON.stringify({
           repoUrl: repoUrlInput.trim(),
-          target: "plugin",
+          target: "service",
         }),
       });
       setInstallOutput(result.installOutput || "");
@@ -398,7 +355,7 @@ export function PluginManagePage() {
         method: "POST",
         body: JSON.stringify({
           name: selectedName,
-          target: "plugin",
+          target: "service",
           repoUrl: repoEditInput.trim(),
         }),
       });
@@ -418,7 +375,7 @@ export function PluginManagePage() {
     const raw = detail?.originUrl || detail?.repository || "";
     const href = toBrowserRepoUrl(raw);
     if (!href) {
-      toast.warning("该插件没有可用仓库地址");
+      toast.warning("该服务没有可用仓库地址");
       return;
     }
     window.open(href, "_blank", "noopener,noreferrer");
@@ -429,8 +386,8 @@ export function PluginManagePage() {
       <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/80 p-3 backdrop-blur">
         <Button
           size="sm"
-          onClick={updateAllPlugins}
-          disabled={updatingAll || loadingOverview || plugins.length === 0}
+          onClick={updateAllServices}
+          disabled={updatingAll || loadingOverview || services.length === 0}
         >
           {updatingAll ? (
             <>
@@ -457,18 +414,18 @@ export function PluginManagePage() {
       {mode === "overview" ? (
         <Card className="animate-soft-pop">
           <CardHeader>
-            <CardTitle>插件总览</CardTitle>
-            <CardDescription>点击某插件查看其详情 :)</CardDescription>
+            <CardTitle>服务总览</CardTitle>
+            <CardDescription>点击某服务查看其详情 :)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {plugins.map((plugin) => (
+            {services.map((service) => (
               <button
-                key={plugin.name}
+                key={service.name}
                 type="button"
                 onClick={() => {
-                  setSelectedName(plugin.name);
+                  setSelectedName(service.name);
                   setMode("detail");
-                  loadDetail(plugin.name).then();
+                  loadDetail(service.name).then();
                 }}
                 className="group w-full rounded-xl border bg-card/70 p-3 text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
               >
@@ -476,18 +433,18 @@ export function PluginManagePage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate text-sm font-semibold">
-                        {plugin.name}
+                        {service.name}
                       </p>
-                      {plugin.isSystemPlugin ? (
+                      {service.isSystemService ? (
                         <Badge>system</Badge>
                       ) : (
-                        <Badge>{plugin.version}</Badge>
+                        <Badge>{service.version}</Badge>
                       )}
-                      {getUpdateBadge(plugin.updateState, plugin.behind)}
+                      {getUpdateBadge(service.updateState, service.behind)}
                     </div>
-                    {plugin.description ? (
+                    {service.description ? (
                       <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {plugin.description}
+                        {service.description}
                       </p>
                     ) : null}
                   </div>
@@ -496,15 +453,15 @@ export function PluginManagePage() {
                       size="sm"
                       onClick={(event) => {
                         event.stopPropagation();
-                        updatePlugin(plugin.name).then();
+                        updateService(service.name).then();
                       }}
                       disabled={
-                        !plugin.hasGit ||
-                        updatingName === plugin.name ||
-                        removingName === plugin.name
+                        !service.hasGit ||
+                        updatingName === service.name ||
+                        removingName === service.name
                       }
                     >
-                      {updatingName === plugin.name ? (
+                      {updatingName === service.name ? (
                         <LoaderCircle className="h-4 w-4 animate-spin" />
                       ) : (
                         "更新"
@@ -515,17 +472,17 @@ export function PluginManagePage() {
                       variant="destructive"
                       onClick={(event) => {
                         event.stopPropagation();
-                        removePlugin(plugin.name).then();
+                        removeService(service.name).then();
                       }}
                       disabled={
-                        plugin.isSystemPlugin ||
-                        updatingName === plugin.name ||
-                        removingName === plugin.name
+                        Boolean(service.isSystemService) ||
+                        updatingName === service.name ||
+                        removingName === service.name
                       }
                     >
-                      {plugin.isSystemPlugin ? (
-                        "卸载"
-                      ) : removingName === plugin.name ? (
+                      {service.isSystemService ? (
+                        "system"
+                      ) : removingName === service.name ? (
                         <LoaderCircle className="h-4 w-4 animate-spin" />
                       ) : (
                         "卸载"
@@ -535,8 +492,8 @@ export function PluginManagePage() {
                 </div>
               </button>
             ))}
-            {!loadingOverview && plugins.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无插件</p>
+            {!loadingOverview && services.length === 0 ? (
+              <p className="text-sm text-muted-foreground">暂无服务</p>
             ) : null}
           </CardContent>
         </Card>
@@ -545,9 +502,9 @@ export function PluginManagePage() {
       {mode === "install" ? (
         <Card className="animate-soft-pop">
           <CardHeader>
-            <CardTitle>安装插件</CardTitle>
+            <CardTitle>安装服务</CardTitle>
             <CardDescription>
-              输入插件 Git 仓库地址，服务端会 clone 并安装依赖。
+              输入服务 Git 仓库地址，服务端会 clone 并安装依赖。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -557,7 +514,7 @@ export function PluginManagePage() {
               onChange={(event) => setRepoUrlInput(event.target.value)}
             />
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={installPlugin} disabled={installing}>
+              <Button onClick={installService} disabled={installing}>
                 {installing ? (
                   <>
                     <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
@@ -589,7 +546,7 @@ export function PluginManagePage() {
             <Card>
               <CardContent className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
                 <LoaderCircle className="h-4 w-4 animate-spin" />
-                正在加载插件详情...
+                正在加载服务详情...
               </CardContent>
             </Card>
           ) : null}
@@ -600,16 +557,14 @@ export function PluginManagePage() {
                 <CardHeader>
                   <div className="flex flex-wrap items-center gap-2">
                     <CardTitle>{detail.name}</CardTitle>
-                    {detail.isSystemPlugin ? (
+                    {detail.isSystemService ? (
                       <Badge>system</Badge>
                     ) : (
                       <Badge>{detail.version}</Badge>
                     )}
                     {getUpdateBadge(detail.updateState, detail.behind)}
                   </div>
-                  <CardDescription>
-                    {detail.description || "无描述"}
-                  </CardDescription>
+                  <CardDescription>{detail.description || "无描述"}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex flex-wrap gap-2">
@@ -622,7 +577,7 @@ export function PluginManagePage() {
                       打开仓库
                     </Button>
                     <Button
-                      onClick={() => updatePlugin(detail.name)}
+                      onClick={() => updateService(detail.name)}
                       disabled={!detail.hasGit || updatingName === detail.name}
                     >
                       {updatingName === detail.name ? (
@@ -633,14 +588,14 @@ export function PluginManagePage() {
                     </Button>
                     <Button
                       variant="destructive"
-                      onClick={() => removePlugin(detail.name)}
+                      onClick={() => removeService(detail.name)}
                       disabled={
-                        Boolean(detail.isSystemPlugin) ||
+                        Boolean(detail.isSystemService) ||
                         removingName === detail.name
                       }
                     >
-                      {detail.isSystemPlugin ? (
-                        "卸载"
+                      {detail.isSystemService ? (
+                        "system"
                       ) : removingName === detail.name ? (
                         <LoaderCircle className="h-4 w-4 animate-spin" />
                       ) : (
@@ -654,15 +609,10 @@ export function PluginManagePage() {
                     <div className="flex flex-col gap-2 md:flex-row">
                       <Input
                         value={repoEditInput}
-                        onChange={(event) =>
-                          setRepoEditInput(event.target.value)
-                        }
+                        onChange={(event) => setRepoEditInput(event.target.value)}
                         placeholder="输入新的 Git 仓库地址"
                       />
-                      <Button
-                        onClick={changeRepo}
-                        disabled={savingRepo || !detail.hasGit}
-                      >
+                      <Button onClick={changeRepo} disabled={savingRepo || !detail.hasGit}>
                         {savingRepo ? (
                           <LoaderCircle className="h-4 w-4 animate-spin" />
                         ) : (
@@ -680,9 +630,7 @@ export function PluginManagePage() {
                           <Badge key={service}>{service}</Badge>
                         ))
                       ) : (
-                        <p className="text-xs text-muted-foreground">
-                          无额外服务依赖
-                        </p>
+                        <p className="text-xs text-muted-foreground">无额外服务依赖</p>
                       )}
                     </div>
                     {detail.missingServices.length > 0 ? (
@@ -692,13 +640,6 @@ export function PluginManagePage() {
                     ) : null}
                   </div>
                 </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>插件帮助</CardTitle>
-                </CardHeader>
-                <CardContent>{renderHelp(detail.help)}</CardContent>
               </Card>
 
               <Card>
@@ -714,7 +655,7 @@ export function PluginManagePage() {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      该插件没有 README 文件。
+                      该服务没有 README 文件。
                     </p>
                   )}
                 </CardContent>
@@ -725,8 +666,7 @@ export function PluginManagePage() {
           {!loadingDetail && !detail && selectedName ? (
             <Card>
               <CardContent className="p-5 text-sm text-muted-foreground">
-                未找到插件 <span className="font-mono">{selectedName}</span>{" "}
-                的详情。
+                未找到服务 <span className="font-mono">{selectedName}</span> 的详情。
               </CardContent>
             </Card>
           ) : null}
@@ -743,7 +683,7 @@ export function PluginManagePage() {
               <div>
                 <p className="font-semibold">检测到缺失服务</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  插件安装完成，但以下服务未安装：
+                  服务安装完成，但以下服务未安装：
                 </p>
               </div>
             </div>

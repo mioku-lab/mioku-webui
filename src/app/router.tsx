@@ -17,14 +17,14 @@ const MiokuConfigPage = lazy(() =>
     default: m.MiokuConfigPage,
   })),
 );
-const PackagePage = lazy(() =>
-  import("@/features/management/PackagePage").then((m) => ({
-    default: m.PackagePage,
-  })),
-);
 const PluginManagePage = lazy(() =>
   import("@/features/management/PluginManagePage").then((m) => ({
     default: m.PluginManagePage,
+  })),
+);
+const ServiceManagePage = lazy(() =>
+  import("@/features/management/ServiceManagePage").then((m) => ({
+    default: m.ServiceManagePage,
   })),
 );
 const AIConfigPage = lazy(() =>
@@ -115,7 +115,7 @@ export const router = createBrowserRouter([
         path: "services",
         element: (
           <LazyWrap>
-            <PackagePage target="service" />
+            <ServiceManagePage />
           </LazyWrap>
         ),
       },
