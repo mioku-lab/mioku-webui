@@ -1,0 +1,109 @@
+name: Release On Version Change
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - package.json
+
+permissions:
+  contents: write
+
+concurrency:
+  group: webui-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Detect version change
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NEW_VERSION="$(bun -e "const pkg = JSON.parse(await Bun.file('package.json').text()); console.log(pkg.version ?? '')")"
+          BEFORE_SHA="${{ github.event.before }}"
+          ZERO_SHA="0000000000000000000000000000000000000000"
+
+          if [ -z "${NEW_VERSION}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${BEFORE_SHA}" = "${ZERO_SHA}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PREV_PACKAGE_JSON="$(git show "${BEFORE_SHA}:package.json" 2>/dev/null || true)"
+          PREV_VERSION=""
+          if [ -n "${PREV_PACKAGE_JSON}" ]; then
+            PREV_VERSION="$(printf '%s' "${PREV_PACKAGE_JSON}" | bun -e "const text = await new Response(Bun.stdin.stream()).text(); try { console.log(JSON.parse(text).version ?? '') } catch { console.log('') }")"
+          fi
+
+          echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+          if [ "${NEW_VERSION}" != "${PREV_VERSION}" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check tag exists
+        id: tag
+        if: steps.version.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.version.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.version.outputs.changed == 'true' && steps.tag.outputs.exists == 'false'
+        run: bun install --frozen-lockfile
+
+      - name: Build dist
+        if: steps.version.outputs.changed == 'true' && steps.tag.outputs.exists == 'false'
+        run: bun run build
+
+      - name: Pack dist
+        id: pack
+        if: steps.version.outputs.changed == 'true' && steps.tag.outputs.exists == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="mioku-webui-dist-v${{ steps.version.outputs.version }}.zip"
+          printf '{\"version\":\"%s\"}\n' "${{ steps.version.outputs.version }}" > dist/webui-version.json
+          cd dist
+          zip -r "../${ARCHIVE}" .
+          cd ..
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        if: steps.version.outputs.changed == 'true' && steps.tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.pack.outputs.archive }}
+          body: |
+            Automated release for version bump in `package.json`.
+            Includes built WebUI dist archive.

@@ -27,11 +27,6 @@ const ServiceManagePage = lazy(() =>
     default: m.ServiceManagePage,
   })),
 );
-const AIConfigPage = lazy(() =>
-  import("@/features/ai/AIConfigPage").then((m) => ({
-    default: m.AIConfigPage,
-  })),
-);
 const PluginConfigPage = lazy(() =>
   import("@/features/plugin-config/PluginConfigPage").then((m) => ({
     default: m.PluginConfigPage,
@@ -116,14 +111,6 @@ export const router = createBrowserRouter([
         element: (
           <LazyWrap>
             <ServiceManagePage />
-          </LazyWrap>
-        ),
-      },
-      {
-        path: "ai",
-        element: (
-          <LazyWrap>
-            <AIConfigPage />
           </LazyWrap>
         ),
       },

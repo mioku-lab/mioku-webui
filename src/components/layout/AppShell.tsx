@@ -11,7 +11,6 @@ const navItems = [
   { to: "/config", label: "Mioku配置" },
   { to: "/plugins", label: "插件管理" },
   { to: "/services", label: "服务管理" },
-  { to: "/ai", label: "AI配置" },
   { to: "/plugin-config", label: "插件配置" },
   { to: "/database", label: "数据库" },
   { to: "/webui", label: "WebUI管理" },
