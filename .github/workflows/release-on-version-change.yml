@@ -7,6 +7,14 @@ on:
       - master
     paths:
       - package.json
+      - .github/workflows/release-on-version-change.yml
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Force release current package.json version"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -30,12 +38,21 @@ jobs:
       - name: Detect version change
         id: version
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FORCE_RELEASE_INPUT: ${{ github.event.inputs.force_release }}
         run: |
           set -euo pipefail
 
           NEW_VERSION="$(bun -e "const pkg = JSON.parse(await Bun.file('package.json').text()); console.log(pkg.version ?? '')")"
           BEFORE_SHA="${{ github.event.before }}"
           ZERO_SHA="0000000000000000000000000000000000000000"
+
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ] && [ "${FORCE_RELEASE_INPUT:-}" = "true" ]; then
+            echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           if [ -z "${NEW_VERSION}" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
