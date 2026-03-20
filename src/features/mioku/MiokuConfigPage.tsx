@@ -27,7 +27,6 @@ type WebUISettings = {
   port: number;
   host: string;
   packageManager: string;
-  autoOpen: boolean;
 };
 
 type ConfigTab = "owners" | "admins" | "napcat" | "plugins" | "webui";
@@ -51,7 +50,6 @@ export function MiokuConfigPage() {
     port: 3339,
     host: "0.0.0.0",
     packageManager: "bun",
-    autoOpen: false,
   });
   const [availablePlugins, setAvailablePlugins] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,7 +82,6 @@ export function MiokuConfigPage() {
           port: 3339,
           host: "0.0.0.0",
           packageManager: "bun",
-          autoOpen: false,
         },
       );
       setAvailablePlugins(pluginsRes.data || []);
@@ -498,23 +495,6 @@ export function MiokuConfigPage() {
                   <option value="yarn">yarn</option>
                   <option value="pnpm">pnpm</option>
                 </select>
-              </div>
-              <div className="flex items-center gap-2 pt-5">
-                <input
-                  type="checkbox"
-                  id="autoOpen"
-                  className="form-checkbox"
-                  checked={webuiSettings.autoOpen}
-                  onChange={(e) =>
-                    setWebuiSettings((prev) => ({
-                      ...prev,
-                      autoOpen: e.target.checked,
-                    }))
-                  }
-                />
-                <label htmlFor="autoOpen" className="text-sm">
-                  自动打开浏览器
-                </label>
               </div>
             </div>
           </CardContent>

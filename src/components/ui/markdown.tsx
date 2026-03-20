@@ -54,14 +54,24 @@ export function Markdown({ content }: { content: string }) {
               {children}
             </td>
           ),
-          code: ({ inline, children }) =>
-            inline ? (
-              <code className="rounded bg-secondary/60 px-1 py-0.5 font-mono text-[0.82em]">
-                {children}
-              </code>
-            ) : (
-              <code className="font-mono text-xs leading-5">{children}</code>
-            ),
+          code: ({ node, className, children }) => {
+            const isBlock =
+              Boolean(className) ||
+              Boolean(
+                node?.position &&
+                  node.position.start.line !== node.position.end.line,
+              );
+
+            if (!isBlock) {
+              return (
+                <code className="rounded bg-secondary/60 px-1 py-0.5 font-mono text-[0.82em]">
+                  {children}
+                </code>
+              );
+            }
+
+            return <code className="font-mono text-xs leading-5">{children}</code>;
+          },
           pre: ({ children }) => (
             <pre className="overflow-auto rounded-lg border bg-secondary/20 p-3">
               {children}

@@ -9,6 +9,7 @@ import type { ReactNode, WheelEvent } from "react";
 const navItems = [
   { to: "/", label: "状态总览" },
   { to: "/config", label: "Mioku配置" },
+  { to: "/ai", label: "AI设置" },
   { to: "/plugins", label: "插件管理" },
   { to: "/services", label: "服务管理" },
   { to: "/plugin-config", label: "插件配置" },
@@ -217,12 +218,12 @@ export function AppShell() {
           <main ref={maxWidthRef} className="space-y-3 px-3 md:space-y-5 md:px-0">
             <div className="sticky top-3 z-20 flex justify-center md:px-0">
               <header
-                className={`flex items-center justify-between gap-3 border bg-card panel-glow animate-soft-pop transition-all duration-500 ease-[cubic-bezier(0.2,0.9,0.3,1.1)] motion-reduce:transition-none ${
+                className={`relative flex items-center justify-between gap-3 border bg-card panel-glow animate-soft-pop transition-all duration-500 ease-[cubic-bezier(0.2,0.9,0.3,1.1)] motion-reduce:transition-none ${
                   topbarMode === "initial"
                     ? "translate-y-0 rounded-xl p-4"
                     : topbarMode === "island"
-                      ? "translate-y-2 rounded-2xl px-4 py-2.5 shadow-xl shadow-black/10 backdrop-blur-md -mx-3 md:mx-0"
-                      : "-translate-y-[140%] rounded-2xl px-4 py-2.5 opacity-0 pointer-events-none"
+                      ? "topbar-island-fade translate-y-2 rounded-2xl px-4 py-2.5 shadow-xl shadow-black/10 backdrop-blur-md -mx-3 md:mx-0"
+                      : "topbar-island-fade -translate-y-[140%] rounded-2xl px-4 py-2.5 opacity-0 pointer-events-none"
                 }`}
                 style={{
                   width: topbarMode === "initial" ? "100%" : `${compactWidth}px`,
@@ -244,7 +245,9 @@ export function AppShell() {
                     <Menu className="h-4 w-4" />
                   </Button>
                   <div
-                    className="topbar-chip-scroll flex min-w-0 flex-1 items-center gap-2 overflow-x-auto touch-pan-x"
+                    className={`topbar-chip-scroll flex min-w-0 flex-1 items-center gap-2 overflow-x-auto touch-pan-x ${
+                      topbarMode === "initial" ? "" : "topbar-island-content-fade"
+                    }`}
                     onWheel={handleTopbarHorizontalWheel}
                   >
                     <div key={location.pathname} className="animate-soft-pop">

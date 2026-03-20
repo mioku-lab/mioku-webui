@@ -153,6 +153,17 @@
     opacity: 0.5 !important;
     cursor: not-allowed !important;
   }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }
 
 @layer utilities {
@@ -218,6 +229,48 @@
     display: none;
     width: 0;
     height: 0;
+  }
+
+  .topbar-island-fade {
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .topbar-island-fade::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 34px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.95;
+    transition: opacity 240ms ease;
+  }
+
+  .topbar-island-fade::after {
+    right: 0;
+    background: linear-gradient(
+      270deg,
+      hsl(var(--card)) 16%,
+      hsl(var(--card) / 0.92) 48%,
+      hsl(var(--card) / 0) 100%
+    );
+  }
+
+  .topbar-island-content-fade {
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      black 0,
+      black calc(100% - 18px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      90deg,
+      black 0,
+      black calc(100% - 18px),
+      transparent 100%
+    );
   }
 
   .topbar-nav-item-enter {
