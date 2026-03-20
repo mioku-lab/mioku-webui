@@ -23,20 +23,13 @@ type NapCatConfig = {
   token: string;
 };
 
-type WebUISettings = {
-  port: number;
-  host: string;
-  packageManager: string;
-};
-
-type ConfigTab = "owners" | "admins" | "napcat" | "plugins" | "webui";
+type ConfigTab = "owners" | "admins" | "napcat" | "plugins";
 
 const tabLabels: Record<ConfigTab, string> = {
   owners: "主人配置",
   admins: "管理员配置",
   napcat: "Onebot配置",
   plugins: "插件开关",
-  webui: "WebUI配置",
 };
 
 export function MiokuConfigPage() {
@@ -45,11 +38,6 @@ export function MiokuConfigPage() {
     admins: [],
     napcat: [],
     plugins: [],
-  });
-  const [webuiSettings, setWebuiSettings] = useState<WebUISettings>({
-    port: 3339,
-    host: "0.0.0.0",
-    packageManager: "bun",
   });
   const [availablePlugins, setAvailablePlugins] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -65,9 +53,8 @@ export function MiokuConfigPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [miokuRes, webuiRes, pluginsRes] = await Promise.all([
+      const [miokuRes, pluginsRes] = await Promise.all([
         apiFetch<{ data: MiokuConfig }>("/api/config/mioku"),
-        apiFetch<{ data: WebUISettings }>("/api/settings"),
         apiFetch<{ data: string[] }>("/api/config/plugins/available"),
       ]);
       const config = miokuRes.data || {
@@ -77,18 +64,8 @@ export function MiokuConfigPage() {
         plugins: [],
       };
       setMiokuConfig(config);
-      setWebuiSettings(
-        webuiRes.data || {
-          port: 3339,
-          host: "0.0.0.0",
-          packageManager: "bun",
-        },
-      );
       setAvailablePlugins(pluginsRes.data || []);
-      initialConfigRef.current = JSON.stringify({
-        mioku: config,
-        webui: webuiRes.data,
-      });
+      initialConfigRef.current = JSON.stringify(config);
     } catch {
       toast.error("加载配置失败");
     } finally {
@@ -101,12 +78,9 @@ export function MiokuConfigPage() {
   }, []);
 
   useEffect(() => {
-    const current = JSON.stringify({
-      mioku: miokuConfig,
-      webui: webuiSettings,
-    });
+    const current = JSON.stringify(miokuConfig);
     setHasChanges(current !== initialConfigRef.current);
-  }, [miokuConfig, webuiSettings]);
+  }, [miokuConfig]);
 
   useEffect(() => {
     const chipClass = (active: boolean) =>
@@ -147,21 +121,12 @@ export function MiokuConfigPage() {
   const saveAll = async () => {
     setSaving(true);
     try {
-      await Promise.all([
-        apiFetch("/api/config/mioku", {
-          method: "PUT",
-          body: JSON.stringify(miokuConfig),
-        }),
-        apiFetch("/api/settings", {
-          method: "PUT",
-          body: JSON.stringify(webuiSettings),
-        }),
-      ]);
-      toast.success("配置保存成功");
-      initialConfigRef.current = JSON.stringify({
-        mioku: miokuConfig,
-        webui: webuiSettings,
+      await apiFetch("/api/config/mioku", {
+        method: "PUT",
+        body: JSON.stringify(miokuConfig),
       });
+      toast.success("配置保存成功");
+      initialConfigRef.current = JSON.stringify(miokuConfig);
       setHasChanges(false);
     } catch {
       toast.error("保存失败");
@@ -443,63 +408,6 @@ export function MiokuConfigPage() {
         </Card>
       )}
 
-      {activeTab === "webui" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>WebUI 配置</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">端口</label>
-                <Input
-                  type="number"
-                  value={webuiSettings.port}
-                  onChange={(e) =>
-                    setWebuiSettings((prev) => ({
-                      ...prev,
-                      port: parseInt(e.target.value) || 3339,
-                    }))
-                  }
-                  className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">主机</label>
-                <Input
-                  value={webuiSettings.host}
-                  onChange={(e) =>
-                    setWebuiSettings((prev) => ({
-                      ...prev,
-                      host: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">
-                  包管理器
-                </label>
-                <select
-                  className="form-select w-full"
-                  value={webuiSettings.packageManager}
-                  onChange={(e) =>
-                    setWebuiSettings((prev) => ({
-                      ...prev,
-                      packageManager: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="bun">bun</option>
-                  <option value="npm">npm</option>
-                  <option value="yarn">yarn</option>
-                  <option value="pnpm">pnpm</option>
-                </select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import type { ReactNode, WheelEvent } from "react";
 
 const navItems = [
   { to: "/", label: "状态总览" },
-  { to: "/config", label: "Mioku配置" },
+  { to: "/config", label: "Mioku设置" },
   { to: "/ai", label: "AI设置" },
   { to: "/plugins", label: "插件管理" },
   { to: "/services", label: "服务管理" },

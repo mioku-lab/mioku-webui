@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, RefreshCw } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2, RefreshCw, Save } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTopbar } from "@/components/layout/TopbarContext";
 import { apiFetch, clearAuth } from "@/lib/api";
 import { useAppDispatch } from "@/app/hooks";
 import { setToken } from "@/features/auth/authSlice";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
 interface WebUIUpdateInfo {
   currentVersion: string;
@@ -22,14 +30,69 @@ interface WebUIUpdateInfo {
   error?: string;
 }
 
+interface WebUISettings {
+  port: number;
+  host: string;
+  packageManager: string;
+}
+
 export function WebUIManagePage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { setLeftContent, setRightContent } = useTopbar();
   const [checking, setChecking] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<WebUIUpdateInfo | null>(null);
+  const [settings, setSettings] = useState<WebUISettings>({
+    port: 3339,
+    host: "0.0.0.0",
+    packageManager: "bun",
+  });
+  const [hasSettingsChanges, setHasSettingsChanges] = useState(false);
+  const initialSettingsRef = useRef("");
   const updateNowRef = useRef<() => void>(() => {});
+
+  useUnsavedChanges(hasSettingsChanges, {
+    message: "WebUI 设置还没有保存，确定要离开吗？",
+  });
+
+  useEffect(() => {
+    const current = JSON.stringify(settings);
+    setHasSettingsChanges(
+      initialSettingsRef.current.length > 0 &&
+        current !== initialSettingsRef.current,
+    );
+  }, [settings]);
+
+  const loadSettings = useCallback(async () => {
+    const res = await apiFetch<{ ok: boolean; data: WebUISettings }>(
+      "/api/settings",
+    );
+    const nextSettings = res.data || {
+      port: 3339,
+      host: "0.0.0.0",
+      packageManager: "bun",
+    };
+    setSettings(nextSettings);
+    initialSettingsRef.current = JSON.stringify(nextSettings);
+    setHasSettingsChanges(false);
+  }, []);
+
+  const saveSettings = useCallback(async () => {
+    setSavingSettings(true);
+    try {
+      await apiFetch("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify(settings),
+      });
+      initialSettingsRef.current = JSON.stringify(settings);
+      setHasSettingsChanges(false);
+      toast.success("WebUI 设置已保存");
+    } finally {
+      setSavingSettings(false);
+    }
+  }, [settings]);
 
   useEffect(() => {
     setLeftContent(
@@ -41,12 +104,29 @@ export function WebUIManagePage() {
         />
       </span>,
     );
-    setRightContent(null);
+    setRightContent(
+      <Button
+        size="sm"
+        onClick={() => void saveSettings()}
+        disabled={savingSettings || !hasSettingsChanges}
+      >
+        <Save className="h-4 w-4 sm:mr-1" />
+        <span className="hidden sm:inline">
+          {savingSettings ? "保存中..." : "保存设置"}
+        </span>
+      </Button>,
+    );
     return () => {
       setLeftContent(null);
       setRightContent(null);
     };
-  }, [setLeftContent, setRightContent]);
+  }, [
+    hasSettingsChanges,
+    saveSettings,
+    savingSettings,
+    setLeftContent,
+    setRightContent,
+  ]);
 
   const checkUpdate = useCallback(
     async ({
@@ -125,8 +205,63 @@ export function WebUIManagePage() {
     void checkUpdate();
   }, [checkUpdate]);
 
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
   return (
     <div className="animate-soft-pop space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>WebUI 设置</CardTitle>
+          <CardDescription>管理 WebUI 自身的端口、主机和包管理器。</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">端口</label>
+            <Input
+              type="number"
+              value={settings.port}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  port: parseInt(e.target.value, 10) || 3339,
+                }))
+              }
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">主机</label>
+            <Input
+              value={settings.host}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  host: e.target.value,
+                }))
+              }
+            />
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-xs text-muted-foreground">包管理器</label>
+            <select
+              className="form-select w-full"
+              value={settings.packageManager}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  packageManager: e.target.value,
+                }))
+              }
+            >
+              <option value="bun">bun</option>
+              <option value="npm">npm</option>
+              <option value="pnpm">pnpm</option>
+            </select>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>WebUI 管理</CardTitle>
