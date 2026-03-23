@@ -59,7 +59,7 @@ type SettingsConfig = {
   debug: boolean;
   outputLengthConstraintStrength: Strength;
   toolCallConstraintStrength: Strength;
-  toolContextTtlMs: number;
+  groupStructuredHistoryTtlMs: number;
   nicknames: string[];
   cooldownAfterReplyMs: number;
   dynamicDelay: {
@@ -172,7 +172,7 @@ const emptySettingsConfig: SettingsConfig = {
   debug: false,
   outputLengthConstraintStrength: "medium",
   toolCallConstraintStrength: "medium",
-  toolContextTtlMs: 1800000,
+  groupStructuredHistoryTtlMs: 600000,
   nicknames: [],
   cooldownAfterReplyMs: 20000,
   dynamicDelay: {
@@ -701,15 +701,15 @@ export function AIConfigPage() {
             />
           </Field>
           <Field
-            label="工具上下文保留时长 (ms)"
-            hint="Tool 调用上下文在会话里保留多久"
+            label="群对话结构化历史保留时长 (ms)"
+            hint="群里最后一次有人和 bot 对话后，这段结构化 user/assistant/tool 历史保留多久"
           >
             <Input
               type="number"
-              value={settings.toolContextTtlMs}
+              value={settings.groupStructuredHistoryTtlMs}
               onChange={(e) =>
                 updateSettings(
-                  "toolContextTtlMs",
+                  "groupStructuredHistoryTtlMs",
                   clampNumber(e.target.value, 0),
                 )
               }
