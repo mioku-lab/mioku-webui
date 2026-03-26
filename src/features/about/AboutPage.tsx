@@ -93,7 +93,7 @@ export function AboutPage() {
         }
 
         if (data.hasUpdates) {
-          toast.info(`origin/main 有 ${data.behind} 个新提交`, {
+          toast.info(`${data.targetRef} 有 ${data.behind} 个新提交`, {
             description: `当前分支 ${data.currentBranch}`,
           });
           return;
@@ -175,7 +175,7 @@ export function AboutPage() {
     ? miokuUpdate.error
     : miokuUpdate?.hasUpdates
       ? `检测到 ${miokuUpdate.behind} 个新提交，当前分支 ${miokuUpdate.currentBranch} 落后于 ${miokuUpdate.targetRef}。`
-      : `当前分支 ${miokuUpdate?.currentBranch || "unknown"} 已和 ${miokuUpdate?.targetRef || "origin/main"} 保持同步。`;
+      : `当前分支 ${miokuUpdate?.currentBranch || "unknown"} 已和 ${miokuUpdate?.targetRef || "origin/unknown"} 保持同步。`;
 
   return (
     <div className="space-y-4 animate-soft-pop">
@@ -217,7 +217,7 @@ export function AboutPage() {
         <CardHeader>
           <CardTitle>仓库更新</CardTitle>
           <CardDescription>
-            检查当前仓库相对 `origin/main` 的更新情况，并按需执行更新。
+            检查当前仓库相对远端同名分支的更新情况，并按需执行更新。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
