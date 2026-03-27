@@ -48,6 +48,12 @@ type SettingsConfig = {
     browserTimeoutMs: number;
     allowedContentTypes: string[];
   };
+  audio: {
+    enabled: boolean;
+    baseUrl: string;
+    apiKey: string;
+    timeoutMs: number;
+  };
   blacklistGroups: string[];
   whitelistGroups: string[];
   imageAnalysisBlacklistUsers: string[];
@@ -162,6 +168,12 @@ const emptySettingsConfig: SettingsConfig = {
     browserTimeoutMs: 15000,
     allowedContentTypes: ["text/html", "application/xhtml+xml", "text/plain"],
   },
+  audio: {
+    enabled: false,
+    baseUrl: "http://127.0.0.1:9880",
+    apiKey: "",
+    timeoutMs: 20000,
+  },
   blacklistGroups: [],
   whitelistGroups: [],
   imageAnalysisBlacklistUsers: [],
@@ -179,9 +191,9 @@ const emptySettingsConfig: SettingsConfig = {
   cooldownAfterReplyMs: 20000,
   dynamicDelay: {
     enabled: true,
-    interactionWindowMs: 600000,
-    baseDelayMs: 60000,
-    maxDelayMs: 600000,
+    interactionWindowMs: 60000,
+    baseDelayMs: 30000,
+    maxDelayMs: 300000,
   },
 };
 
@@ -369,6 +381,10 @@ export function AIConfigPage() {
         webReader: {
           ...emptySettingsConfig.webReader,
           ...(settingsRes.data?.webReader || {}),
+        },
+        audio: {
+          ...emptySettingsConfig.audio,
+          ...(settingsRes.data?.audio || {}),
         },
         dynamicDelay: {
           ...emptySettingsConfig.dynamicDelay,
@@ -690,29 +706,29 @@ export function AIConfigPage() {
               }
             />
           </Field>
-          <Field label="回复后冷却时间 (ms)" hint="群聊内 bot 回复后的基础冷却">
+          <Field label="回复后冷却时间 (分钟)" hint="群聊内 bot 回复后的基础冷却">
             <Input
               type="number"
-              value={settings.cooldownAfterReplyMs}
+              value={settings.cooldownAfterReplyMs / 60000}
               onChange={(e) =>
                 updateSettings(
                   "cooldownAfterReplyMs",
-                  clampNumber(e.target.value, 0),
+                  clampNumber(e.target.value, 0) * 60000,
                 )
               }
             />
           </Field>
           <Field
-            label="群对话结构化历史保留时长 (ms)"
+            label="群对话结构化历史保留时长 (分钟)"
             hint="群里最后一次有人和 bot 对话后，这段结构化 user/assistant/tool 历史保留多久"
           >
             <Input
               type="number"
-              value={settings.groupStructuredHistoryTtlMs}
+              value={settings.groupStructuredHistoryTtlMs / 60000}
               onChange={(e) =>
                 updateSettings(
                   "groupStructuredHistoryTtlMs",
-                  clampNumber(e.target.value, 0),
+                  clampNumber(e.target.value, 0) * 60000,
                 )
               }
             />
@@ -778,6 +794,17 @@ export function AIConfigPage() {
             }
           />
           <ToggleField
+            title="语音消息"
+            description="允许 AI 输出 [audio:内容]，调用独立 TTS API 发送语音"
+            checked={settings.audio.enabled}
+            onChange={(checked) =>
+              setSettings((prev) => ({
+                ...prev,
+                audio: { ...prev.audio, enabled: checked },
+              }))
+            }
+          />
+          <ToggleField
             title="群管理员权限"
             description="允许群管理员获得额外控制能力"
             checked={settings.enableGroupAdmin}
@@ -813,52 +840,104 @@ export function AIConfigPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>语音消息</CardTitle>
+          <CardDescription>
+            配置独立的 GPT-SoVITS TTS 接口。启用后，AI 可以在合适场景下输出
+            `[audio:内容]` 并发送语音。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <Field label="TTS API 地址" hint="例如 http://127.0.0.1:9880">
+            <Input
+              value={settings.audio.baseUrl}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  audio: { ...prev.audio, baseUrl: e.target.value },
+                }))
+              }
+              placeholder="http://127.0.0.1:9880"
+            />
+          </Field>
+          <Field label="TTS API Key" hint="对应 GPT-SoVITS 服务端的 X-API-Key">
+            <Input
+              type="password"
+              value={settings.audio.apiKey}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  audio: { ...prev.audio, apiKey: e.target.value },
+                }))
+              }
+              placeholder="留空表示不校验"
+            />
+          </Field>
+          <Field label="TTS 超时 (秒)" hint="语音合成请求的超时时间">
+            <Input
+              type="number"
+              value={settings.audio.timeoutMs / 1000}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  audio: {
+                    ...prev.audio,
+                    timeoutMs: clampNumber(e.target.value, 0) * 1000,
+                  },
+                }))
+              }
+            />
+          </Field>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>动态延迟参数</CardTitle>
           <CardDescription>
             用于控制 bot 在热闹群里的“等一等再说”的策略
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
-          <Field label="互动窗口 (ms)" hint="统计活跃度的时间范围">
+          <Field label="互动窗口 (分钟)" hint="统计活跃度的时间范围">
             <Input
               type="number"
-              value={settings.dynamicDelay.interactionWindowMs}
+              value={settings.dynamicDelay.interactionWindowMs / 60000}
               onChange={(e) =>
                 setSettings((prev) => ({
                   ...prev,
                   dynamicDelay: {
                     ...prev.dynamicDelay,
-                    interactionWindowMs: clampNumber(e.target.value, 0),
+                    interactionWindowMs: clampNumber(e.target.value, 0) * 60000,
                   },
                 }))
               }
             />
           </Field>
-          <Field label="基础延迟 (ms)" hint="至少等待多久再回复">
+          <Field label="基础延迟 (分钟)" hint="每增加一个互动人，额外增加的延迟">
             <Input
               type="number"
-              value={settings.dynamicDelay.baseDelayMs}
+              value={settings.dynamicDelay.baseDelayMs / 60000}
               onChange={(e) =>
                 setSettings((prev) => ({
                   ...prev,
                   dynamicDelay: {
                     ...prev.dynamicDelay,
-                    baseDelayMs: clampNumber(e.target.value, 0),
+                    baseDelayMs: clampNumber(e.target.value, 0) * 60000,
                   },
                 }))
               }
             />
           </Field>
-          <Field label="最大延迟 (ms)" hint="再热闹也不会超过这个等待时间">
+          <Field label="最大延迟 (分钟)" hint="再热闹也不会超过这个等待时间">
             <Input
               type="number"
-              value={settings.dynamicDelay.maxDelayMs}
+              value={settings.dynamicDelay.maxDelayMs / 60000}
               onChange={(e) =>
                 setSettings((prev) => ({
                   ...prev,
                   dynamicDelay: {
                     ...prev.dynamicDelay,
-                    maxDelayMs: clampNumber(e.target.value, 0),
+                    maxDelayMs: clampNumber(e.target.value, 0) * 60000,
                   },
                 }))
               }
@@ -1064,8 +1143,9 @@ export function AIConfigPage() {
               }
             />
             <NumberField
-              label="超时 (ms)"
+              label="超时 (分钟)"
               value={personalization.memory.timeoutMs}
+              msToMin={true}
               onChange={(value) =>
                 setPersonalization((prev) => ({
                   ...prev,
@@ -1096,8 +1176,9 @@ export function AIConfigPage() {
               }
             />
             <NumberField
-              label="时间阈值 (ms)"
+              label="时间阈值 (分钟)"
               value={personalization.topic.timeThresholdMs}
+              msToMin={true}
               onChange={(value) =>
                 setPersonalization((prev) => ({
                   ...prev,
@@ -1128,8 +1209,9 @@ export function AIConfigPage() {
             }
           >
             <NumberField
-              label="空闲阈值 (ms)"
+              label="空闲阈值 (分钟)"
               value={personalization.planner.idleThresholdMs}
+              msToMin={true}
               onChange={(value) =>
                 setPersonalization((prev) => ({
                   ...prev,
@@ -1272,7 +1354,7 @@ export function AIConfigPage() {
             }
           >
             <NumberField
-              label="最大表情数"
+              label="存储上限"
               value={personalization.expression.maxExpressions}
               onChange={(value) =>
                 setPersonalization((prev) => ({
@@ -1282,7 +1364,7 @@ export function AIConfigPage() {
               }
             />
             <NumberField
-              label="采样数"
+              label="注入条数"
               value={personalization.expression.sampleSize}
               onChange={(value) =>
                 setPersonalization((prev) => ({
@@ -1327,8 +1409,9 @@ export function AIConfigPage() {
               />
             </Field>
             <NumberField
-              label="超时 (ms)"
+              label="超时 (秒)"
               value={settings.searxng.timeoutMs}
+              msToSec={true}
               onChange={(value) =>
                 setSettings((prev) => ({
                   ...prev,
@@ -1383,8 +1466,9 @@ export function AIConfigPage() {
               }
             />
             <NumberField
-              label="读取超时 (ms)"
+              label="读取超时 (秒)"
               value={settings.webReader.timeoutMs}
+              msToSec={true}
               onChange={(value) =>
                 setSettings((prev) => ({
                   ...prev,
@@ -1393,8 +1477,9 @@ export function AIConfigPage() {
               }
             />
             <NumberField
-              label="浏览器超时 (ms)"
+              label="浏览器超时 (秒)"
               value={settings.webReader.browserTimeoutMs}
+              msToSec={true}
               onChange={(value) =>
                 setSettings((prev) => ({
                   ...prev,
@@ -1590,19 +1675,33 @@ function NumberField({
   value,
   onChange,
   step,
+  msToMin,
+  msToSec,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   step?: string;
+  msToMin?: boolean;
+  msToSec?: boolean;
 }) {
+  let displayValue = value;
+  if (msToMin) displayValue = Math.round(value / 60000);
+  if (msToSec) displayValue = Math.round(value / 1000);
+  
+  const handleChange = (val: number) => {
+    if (msToMin) onChange(val * 60000);
+    else if (msToSec) onChange(val * 1000);
+    else onChange(val);
+  };
+  
   return (
     <Field label={label}>
       <Input
         type="number"
         step={step}
-        value={value}
-        onChange={(e) => onChange(clampNumber(e.target.value, value))}
+        value={displayValue}
+        onChange={(e) => handleChange(clampNumber(e.target.value, displayValue))}
       />
     </Field>
   );
@@ -1724,6 +1823,7 @@ function countEnabledCapabilities(
     personalization.expression.enabled,
     settings.searxng.enabled,
     settings.webReader.enabled,
+    settings.audio.enabled,
     settings.dynamicDelay.enabled,
     settings.enableExternalSkills,
     settings.enableMarkdownScreenshot,
