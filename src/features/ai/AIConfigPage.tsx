@@ -56,6 +56,7 @@ type SettingsConfig = {
   enableExternalSkills: boolean;
   stream: boolean;
   enableTypingDelay: boolean;
+  enableMarkdownScreenshot: boolean;
   debug: boolean;
   outputLengthConstraintStrength: Strength;
   toolCallConstraintStrength: Strength;
@@ -169,6 +170,7 @@ const emptySettingsConfig: SettingsConfig = {
   enableExternalSkills: true,
   stream: true,
   enableTypingDelay: true,
+  enableMarkdownScreenshot: true,
   debug: false,
   outputLengthConstraintStrength: "medium",
   toolCallConstraintStrength: "medium",
@@ -766,6 +768,14 @@ export function AIConfigPage() {
             description="模拟更自然的输入停顿"
             checked={settings.enableTypingDelay}
             onChange={(checked) => updateSettings("enableTypingDelay", checked)}
+          />
+          <ToggleField
+            title="Markdown 截图"
+            description="允许 AI 用 <MARKDOWN> 块生成带主题和代码高亮的截图消息"
+            checked={settings.enableMarkdownScreenshot}
+            onChange={(checked) =>
+              updateSettings("enableMarkdownScreenshot", checked)
+            }
           />
           <ToggleField
             title="群管理员权限"
@@ -1716,5 +1726,6 @@ function countEnabledCapabilities(
     settings.webReader.enabled,
     settings.dynamicDelay.enabled,
     settings.enableExternalSkills,
+    settings.enableMarkdownScreenshot,
   ].filter(Boolean).length;
 }
