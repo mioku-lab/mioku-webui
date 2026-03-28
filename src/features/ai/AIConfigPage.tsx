@@ -66,6 +66,9 @@ type SettingsConfig = {
   debug: boolean;
   outputLengthConstraintStrength: Strength;
   toolCallConstraintStrength: Strength;
+  emojiUsageConstraintStrength: Strength;
+  audioUsageConstraintStrength: Strength;
+  markdownUsageConstraintStrength: Strength;
   groupStructuredHistoryTtlMs: number;
   nicknames: string[];
   cooldownAfterReplyMs: number;
@@ -112,7 +115,6 @@ type PersonalizationConfig = {
   };
   emoji: {
     enabled: boolean;
-    replyProbability: number;
     characters: string[];
     useAISelection: boolean;
   };
@@ -186,6 +188,9 @@ const emptySettingsConfig: SettingsConfig = {
   debug: false,
   outputLengthConstraintStrength: "medium",
   toolCallConstraintStrength: "medium",
+  emojiUsageConstraintStrength: "medium",
+  audioUsageConstraintStrength: "medium",
+  markdownUsageConstraintStrength: "medium",
   groupStructuredHistoryTtlMs: 600000,
   nicknames: [],
   cooldownAfterReplyMs: 20000,
@@ -232,7 +237,6 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
   },
   emoji: {
     enabled: false,
-    replyProbability: 0.3,
     characters: [],
     useAISelection: true,
   },
@@ -283,9 +287,7 @@ function getCheckboxCardClass(active: boolean, compact = false): string {
     "active:scale-[0.992] active:bg-secondary/45",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
     compact ? "p-3" : "p-4",
-    active
-      ? "border-primary/45 bg-secondary/35"
-      : "border-border/85",
+    active ? "border-primary/45 bg-secondary/35" : "border-border/85",
   );
 }
 
@@ -334,7 +336,9 @@ export function AIConfigPage() {
       const nextPersonalization = {
         ...emptyPersonalizationConfig,
         ...(personalizationRes.data || {}),
-        persona: normalizeEscapedNewlines(personalizationRes.data?.persona || ""),
+        persona: normalizeEscapedNewlines(
+          personalizationRes.data?.persona || "",
+        ),
         personality: {
           ...emptyPersonalizationConfig.personality,
           ...(personalizationRes.data?.personality || {}),
@@ -706,7 +710,10 @@ export function AIConfigPage() {
               }
             />
           </Field>
-          <Field label="回复后冷却时间 (分钟)" hint="群聊内 bot 回复后的基础冷却">
+          <Field
+            label="回复后冷却时间 (分钟)"
+            hint="群聊内 bot 回复后的基础冷却"
+          >
             <Input
               type="number"
               value={settings.cooldownAfterReplyMs / 60000}
@@ -733,7 +740,10 @@ export function AIConfigPage() {
               }
             />
           </Field>
-          <Field label="回复长度约束" hint="约束模型输出不要过长">
+          <Field
+            label="回复长度约束强度"
+            hint="越高越严格限制回复长度，越不容易说多"
+          >
             <SelectField
               value={settings.outputLengthConstraintStrength}
               onChange={(value) =>
@@ -749,11 +759,71 @@ export function AIConfigPage() {
               ]}
             />
           </Field>
-          <Field label="工具调用约束" hint="限制模型胡乱调用工具的力度">
+          <Field
+            label="工具使用约束强度"
+            hint="越高越严格限制调用工具，越不容易乱查乱用"
+          >
             <SelectField
               value={settings.toolCallConstraintStrength}
               onChange={(value) =>
                 updateSettings("toolCallConstraintStrength", value as Strength)
+              }
+              options={[
+                { label: "低", value: "low" },
+                { label: "中", value: "medium" },
+                { label: "高", value: "high" },
+              ]}
+            />
+          </Field>
+          <Field
+            label="表情包约束强度"
+            hint="越高越克制使用表情包，越低越容易用来加强情绪"
+          >
+            <SelectField
+              value={settings.emojiUsageConstraintStrength}
+              onChange={(value) =>
+                updateSettings(
+                  "emojiUsageConstraintStrength",
+                  value as Strength,
+                )
+              }
+              options={[
+                { label: "低", value: "low" },
+                { label: "中", value: "medium" },
+                { label: "高", value: "high" },
+              ]}
+            />
+          </Field>
+          <Field
+            label="语音约束强度"
+            hint="越高越克制使用语音，越低越容易在短句和强情绪时使用"
+          >
+            <SelectField
+              value={settings.audioUsageConstraintStrength}
+              onChange={(value) =>
+                updateSettings(
+                  "audioUsageConstraintStrength",
+                  value as Strength,
+                )
+              }
+              options={[
+                { label: "低", value: "low" },
+                { label: "中", value: "medium" },
+                { label: "高", value: "high" },
+              ]}
+            />
+          </Field>
+          <Field
+            label="Markdown 约束强度"
+            hint="越高越克制使用结构化长内容截图，越低越容易在需要说明时使用"
+          >
+            <SelectField
+              value={settings.markdownUsageConstraintStrength}
+              onChange={(value) =>
+                updateSettings(
+                  "markdownUsageConstraintStrength",
+                  value as Strength,
+                )
               }
               options={[
                 { label: "低", value: "low" },
@@ -787,7 +857,7 @@ export function AIConfigPage() {
           />
           <ToggleField
             title="Markdown 截图"
-            description="允许 AI 用 <MARKDOWN> 块生成带主题和代码高亮的截图消息"
+            description="允许 AI 发送带主题和代码高亮的结构化内容截图"
             checked={settings.enableMarkdownScreenshot}
             onChange={(checked) =>
               updateSettings("enableMarkdownScreenshot", checked)
@@ -795,7 +865,7 @@ export function AIConfigPage() {
           />
           <ToggleField
             title="语音消息"
-            description="允许 AI 输出 [audio:内容]，调用独立 TTS API 发送语音"
+            description="允许 AI 在合适场景下合成并发送语音消息"
             checked={settings.audio.enabled}
             onChange={(checked) =>
               setSettings((prev) => ({
@@ -842,8 +912,8 @@ export function AIConfigPage() {
         <CardHeader>
           <CardTitle>语音消息</CardTitle>
           <CardDescription>
-            配置独立的 GPT-SoVITS TTS 接口。启用后，AI 可以在合适场景下输出
-            `[audio:内容]` 并发送语音。
+            配置独立的 GPT-SoVITS TTS 接口。启用后，AI
+            可以在合适场景下发送简短语音。
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
@@ -913,7 +983,10 @@ export function AIConfigPage() {
               }
             />
           </Field>
-          <Field label="基础延迟 (分钟)" hint="每增加一个互动人，额外增加的延迟">
+          <Field
+            label="基础延迟 (分钟)"
+            hint="每增加一个互动人，额外增加的延迟"
+          >
             <Input
               type="number"
               value={settings.dynamicDelay.baseDelayMs / 60000}
@@ -1301,17 +1374,6 @@ export function AIConfigPage() {
               }))
             }
           >
-            <NumberField
-              label="回复概率"
-              step="0.01"
-              value={personalization.emoji.replyProbability}
-              onChange={(value) =>
-                setPersonalization((prev) => ({
-                  ...prev,
-                  emoji: { ...prev.emoji, replyProbability: value },
-                }))
-              }
-            />
             <Toggle
               checked={personalization.emoji.useAISelection}
               onChange={(checked) =>
@@ -1688,20 +1750,22 @@ function NumberField({
   let displayValue = value;
   if (msToMin) displayValue = Math.round(value / 60000);
   if (msToSec) displayValue = Math.round(value / 1000);
-  
+
   const handleChange = (val: number) => {
     if (msToMin) onChange(val * 60000);
     else if (msToSec) onChange(val * 1000);
     else onChange(val);
   };
-  
+
   return (
     <Field label={label}>
       <Input
         type="number"
         step={step}
         value={displayValue}
-        onChange={(e) => handleChange(clampNumber(e.target.value, displayValue))}
+        onChange={(e) =>
+          handleChange(clampNumber(e.target.value, displayValue))
+        }
       />
     </Field>
   );
