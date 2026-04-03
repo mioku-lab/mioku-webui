@@ -62,6 +62,7 @@ type SettingsConfig = {
   enableExternalSkills: boolean;
   stream: boolean;
   enableTypingDelay: boolean;
+  typingDelayMaxTotalMs: number;
   enableMarkdownScreenshot: boolean;
   debug: boolean;
   outputLengthConstraintStrength: Strength;
@@ -184,6 +185,7 @@ const emptySettingsConfig: SettingsConfig = {
   enableExternalSkills: true,
   stream: true,
   enableTypingDelay: true,
+  typingDelayMaxTotalMs: 10000,
   enableMarkdownScreenshot: true,
   debug: false,
   outputLengthConstraintStrength: "medium",
@@ -741,6 +743,22 @@ export function AIConfigPage() {
             />
           </Field>
           <Field
+            label="打字延迟累计上限 (秒)"
+            hint="开启打字延迟后，单次回复按内容长度模拟停顿，但整次累计不会超过这个值"
+          >
+            <Input
+              type="number"
+              min={0}
+              value={settings.typingDelayMaxTotalMs / 1000}
+              onChange={(e) =>
+                updateSettings(
+                  "typingDelayMaxTotalMs",
+                  clampNumber(e.target.value, 0) * 1000,
+                )
+              }
+            />
+          </Field>
+          <Field
             label="回复长度约束强度"
             hint="越高越严格限制回复长度，越不容易说多"
           >
@@ -851,7 +869,7 @@ export function AIConfigPage() {
           />
           <ToggleField
             title="打字延迟"
-            description="模拟更自然的输入停顿"
+            description="按内容长度模拟更自然的发送停顿；实际总等待时间还会受累计上限控制"
             checked={settings.enableTypingDelay}
             onChange={(checked) => updateSettings("enableTypingDelay", checked)}
           />
