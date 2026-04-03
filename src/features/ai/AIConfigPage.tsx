@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { useTopbar } from "@/components/layout/TopbarContext";
@@ -264,11 +265,6 @@ function normalizeEscapedNewlines(value: string): string {
   return String(value || "")
     .replace(/\\r\\n/g, "\n")
     .replace(/\\n/g, "\n");
-}
-
-function clampNumber(value: string, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function shouldIgnoreCardToggle(target: EventTarget | null): boolean {
@@ -606,43 +602,36 @@ export function AIConfigPage() {
             />
           </Field>
           <Field label="上下文窗口" hint="保留多少条消息上下文">
-            <Input
-              type="number"
+            <NumberInput
               value={base.maxContextTokens}
-              onChange={(e) =>
-                updateBase("maxContextTokens", clampNumber(e.target.value, 0))
-              }
+              onValueChange={(value) => {
+                if (value !== null) updateBase("maxContextTokens", value);
+              }}
             />
           </Field>
           <Field label="温度" hint="越高越发散，越低越稳定">
-            <Input
-              type="number"
+            <NumberInput
               step="0.1"
               value={base.temperature}
-              onChange={(e) =>
-                updateBase(
-                  "temperature",
-                  clampNumber(e.target.value, base.temperature),
-                )
-              }
+              onValueChange={(value) => {
+                if (value !== null) updateBase("temperature", value);
+              }}
             />
           </Field>
           <Field label="群聊历史消息数" hint="会参与上下文拼接的历史条数">
-            <Input
-              type="number"
+            <NumberInput
               value={base.historyCount}
-              onChange={(e) =>
-                updateBase("historyCount", clampNumber(e.target.value, 0))
-              }
+              onValueChange={(value) => {
+                if (value !== null) updateBase("historyCount", value);
+              }}
             />
           </Field>
           <Field label="最大迭代次数" hint="-1 表示不限制">
-            <Input
-              type="number"
+            <NumberInput
               value={base.maxIterations}
-              onChange={(e) =>
-                updateBase("maxIterations", clampNumber(e.target.value, -1))
-              }
+              onValueChange={(value) => {
+                if (value !== null) updateBase("maxIterations", value);
+              }}
             />
           </Field>
           <Field label="多模态能力" hint="关闭后不会启用多模态能力">
@@ -704,58 +693,51 @@ export function AIConfigPage() {
             />
           </Field>
           <Field label="最大会话数" hint="超过后旧会话会被回收">
-            <Input
-              type="number"
+            <NumberInput
               value={settings.maxSessions}
-              onChange={(e) =>
-                updateSettings("maxSessions", clampNumber(e.target.value, 0))
-              }
+              onValueChange={(value) => {
+                if (value !== null) updateSettings("maxSessions", value);
+              }}
             />
           </Field>
           <Field
             label="回复后冷却时间 (分钟)"
             hint="群聊内 bot 回复后的基础冷却"
           >
-            <Input
-              type="number"
+            <NumberInput
               value={settings.cooldownAfterReplyMs / 60000}
-              onChange={(e) =>
-                updateSettings(
-                  "cooldownAfterReplyMs",
-                  clampNumber(e.target.value, 0) * 60000,
-                )
-              }
+              onValueChange={(value) => {
+                if (value !== null) {
+                  updateSettings("cooldownAfterReplyMs", value * 60000);
+                }
+              }}
             />
           </Field>
           <Field
             label="群对话结构化历史保留时长 (分钟)"
             hint="群里最后一次有人和 bot 对话后，这段结构化 user/assistant/tool 历史保留多久"
           >
-            <Input
-              type="number"
+            <NumberInput
               value={settings.groupStructuredHistoryTtlMs / 60000}
-              onChange={(e) =>
-                updateSettings(
-                  "groupStructuredHistoryTtlMs",
-                  clampNumber(e.target.value, 0) * 60000,
-                )
-              }
+              onValueChange={(value) => {
+                if (value !== null) {
+                  updateSettings("groupStructuredHistoryTtlMs", value * 60000);
+                }
+              }}
             />
           </Field>
           <Field
             label="打字延迟累计上限 (秒)"
             hint="开启打字延迟后，单次回复按内容长度模拟停顿，但整次累计不会超过这个值"
           >
-            <Input
-              type="number"
+            <NumberInput
               min={0}
               value={settings.typingDelayMaxTotalMs / 1000}
-              onChange={(e) =>
-                updateSettings(
-                  "typingDelayMaxTotalMs",
-                  clampNumber(e.target.value, 0) * 1000,
-                )
-              }
+              onValueChange={(value) => {
+                if (value !== null) {
+                  updateSettings("typingDelayMaxTotalMs", value * 1000);
+                }
+              }}
             />
           </Field>
           <Field
@@ -961,18 +943,18 @@ export function AIConfigPage() {
             />
           </Field>
           <Field label="TTS 超时 (秒)" hint="语音合成请求的超时时间">
-            <Input
-              type="number"
+            <NumberInput
               value={settings.audio.timeoutMs / 1000}
-              onChange={(e) =>
+              onValueChange={(value) => {
+                if (value === null) return;
                 setSettings((prev) => ({
                   ...prev,
                   audio: {
                     ...prev.audio,
-                    timeoutMs: clampNumber(e.target.value, 0) * 1000,
+                    timeoutMs: value * 1000,
                   },
-                }))
-              }
+                }));
+              }}
             />
           </Field>
         </CardContent>
@@ -987,51 +969,51 @@ export function AIConfigPage() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <Field label="互动窗口 (分钟)" hint="统计活跃度的时间范围">
-            <Input
-              type="number"
+            <NumberInput
               value={settings.dynamicDelay.interactionWindowMs / 60000}
-              onChange={(e) =>
+              onValueChange={(value) => {
+                if (value === null) return;
                 setSettings((prev) => ({
                   ...prev,
                   dynamicDelay: {
                     ...prev.dynamicDelay,
-                    interactionWindowMs: clampNumber(e.target.value, 0) * 60000,
+                    interactionWindowMs: value * 60000,
                   },
-                }))
-              }
+                }));
+              }}
             />
           </Field>
           <Field
             label="基础延迟 (分钟)"
             hint="每增加一个互动人，额外增加的延迟"
           >
-            <Input
-              type="number"
+            <NumberInput
               value={settings.dynamicDelay.baseDelayMs / 60000}
-              onChange={(e) =>
+              onValueChange={(value) => {
+                if (value === null) return;
                 setSettings((prev) => ({
                   ...prev,
                   dynamicDelay: {
                     ...prev.dynamicDelay,
-                    baseDelayMs: clampNumber(e.target.value, 0) * 60000,
+                    baseDelayMs: value * 60000,
                   },
-                }))
-              }
+                }));
+              }}
             />
           </Field>
           <Field label="最大延迟 (分钟)" hint="再热闹也不会超过这个等待时间">
-            <Input
-              type="number"
+            <NumberInput
               value={settings.dynamicDelay.maxDelayMs / 60000}
-              onChange={(e) =>
+              onValueChange={(value) => {
+                if (value === null) return;
                 setSettings((prev) => ({
                   ...prev,
                   dynamicDelay: {
                     ...prev.dynamicDelay,
-                    maxDelayMs: clampNumber(e.target.value, 0) * 60000,
+                    maxDelayMs: value * 60000,
                   },
-                }))
-              }
+                }));
+              }}
             />
           </Field>
         </CardContent>
@@ -1126,22 +1108,19 @@ export function AIConfigPage() {
                 label="人格切换概率"
                 hint="0 到 1 之间，越高越容易切换状态"
               >
-                <Input
-                  type="number"
+                <NumberInput
                   step="0.01"
                   value={personalization.personality.stateProbability}
-                  onChange={(e) =>
+                  onValueChange={(value) => {
+                    if (value === null) return;
                     setPersonalization((prev) => ({
                       ...prev,
                       personality: {
                         ...prev.personality,
-                        stateProbability: clampNumber(
-                          e.target.value,
-                          prev.personality.stateProbability,
-                        ),
+                        stateProbability: value,
                       },
-                    }))
-                  }
+                    }));
+                  }}
                 />
               </Field>
               <Field label="基础说话风格" hint="长期稳定生效的语气说明">
@@ -1178,22 +1157,19 @@ export function AIConfigPage() {
               />
             </Field>
             <Field label="切换风格概率" hint="0 到 1 之间">
-              <Input
-                type="number"
+              <NumberInput
                 step="0.01"
                 value={personalization.replyStyle.multipleProbability}
-                onChange={(e) =>
+                onValueChange={(value) => {
+                  if (value === null) return;
                   setPersonalization((prev) => ({
                     ...prev,
                     replyStyle: {
                       ...prev.replyStyle,
-                      multipleProbability: clampNumber(
-                        e.target.value,
-                        prev.replyStyle.multipleProbability,
-                      ),
+                      multipleProbability: value,
                     },
-                  }))
-                }
+                  }));
+                }}
               />
             </Field>
           </div>
@@ -1777,13 +1753,12 @@ function NumberField({
 
   return (
     <Field label={label}>
-      <Input
-        type="number"
+      <NumberInput
         step={step}
         value={displayValue}
-        onChange={(e) =>
-          handleChange(clampNumber(e.target.value, displayValue))
-        }
+        onValueChange={(value) => {
+          if (value !== null) handleChange(value);
+        }}
       />
     </Field>
   );

@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChevronDown, Eye, EyeOff, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
@@ -282,13 +283,11 @@ export function ConfigPageRenderer({
               {field.label}
               {field.required && <span className="text-destructive ml-1">*</span>}
             </Label>
-            <Input
+            <NumberInput
               id={field.key}
-              type="number"
-              value={value ?? ""}
-              onChange={(e) =>
-                handleFieldChange(field, e.target.value ? Number(e.target.value) : null)
-              }
+              value={typeof value === "number" ? value : null}
+              emptyBehavior="null"
+              onValueChange={(nextValue) => handleFieldChange(field, nextValue)}
               placeholder={field.placeholder}
             />
             {field.description && (

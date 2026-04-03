@@ -16,6 +16,7 @@ import { useAppDispatch } from "@/app/hooks";
 import { setToken } from "@/features/auth/authSlice";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
 interface WebUIUpdateInfo {
@@ -236,15 +237,15 @@ export function WebUIManagePage() {
         <CardContent className="grid gap-3 md:grid-cols-2">
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">端口</label>
-            <Input
-              type="number"
+            <NumberInput
               value={settings.port}
-              onChange={(e) =>
+              onValueChange={(value) => {
+                if (value === null) return;
                 setSettings((prev) => ({
                   ...prev,
-                  port: parseInt(e.target.value, 10) || 3339,
-                }))
-              }
+                  port: value,
+                }));
+              }}
             />
           </div>
           <div className="space-y-1">

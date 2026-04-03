@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { apiFetch } from "@/lib/api";
 import { useTopbar } from "@/components/layout/TopbarContext";
 import { Plus, Trash2, Save } from "lucide-react";
@@ -231,12 +232,11 @@ export function MiokuConfigPage() {
             ) : (
               miokuConfig.owners.map((owner, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={owner || ""}
-                    onChange={(e) =>
-                      updateOwner(index, parseInt(e.target.value) || 0)
-                    }
+                  <NumberInput
+                    value={owner || null}
+                    onValueChange={(value) => {
+                      if (value !== null) updateOwner(index, value);
+                    }}
                     placeholder="QQ 号"
                     className="flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
@@ -271,12 +271,11 @@ export function MiokuConfigPage() {
             ) : (
               miokuConfig.admins.map((admin, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={admin || ""}
-                    onChange={(e) =>
-                      updateAdmin(index, parseInt(e.target.value) || 0)
-                    }
+                  <NumberInput
+                    value={admin || null}
+                    onValueChange={(value) => {
+                      if (value !== null) updateAdmin(index, value);
+                    }}
                     placeholder="QQ 号"
                     className="flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
@@ -349,16 +348,11 @@ export function MiokuConfigPage() {
                       }
                       placeholder="主机地址"
                     />
-                    <Input
-                      type="number"
+                    <NumberInput
                       value={napcat.port}
-                      onChange={(e) =>
-                        updateNapCat(
-                          index,
-                          "port",
-                          parseInt(e.target.value) || 0,
-                        )
-                      }
+                      onValueChange={(value) => {
+                        if (value !== null) updateNapCat(index, "port", value);
+                      }}
                       placeholder="端口"
                       className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
