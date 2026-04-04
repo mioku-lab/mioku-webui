@@ -61,6 +61,7 @@ type SettingsConfig = {
   maxSessions: number;
   enableGroupAdmin: boolean;
   enableExternalSkills: boolean;
+  allowedExternalSkills: string[];
   stream: boolean;
   enableTypingDelay: boolean;
   typingDelayMaxTotalMs: number;
@@ -184,6 +185,7 @@ const emptySettingsConfig: SettingsConfig = {
   maxSessions: 100,
   enableGroupAdmin: true,
   enableExternalSkills: true,
+  allowedExternalSkills: [],
   stream: true,
   enableTypingDelay: true,
   typingDelayMaxTotalMs: 10000,
@@ -527,6 +529,40 @@ export function AIConfigPage() {
     value: SettingsConfig[K],
   ) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const toggleAllowedExternalSkill = (skillName: string) => {
+    setSettings((prev) => {
+      const availableSkills = resources.skills.filter(Boolean);
+      const currentSelected =
+        prev.allowedExternalSkills.length > 0
+          ? prev.allowedExternalSkills.filter((skill) =>
+              availableSkills.includes(skill),
+            )
+          : [...availableSkills];
+
+      const nextSelected = currentSelected.includes(skillName)
+        ? currentSelected.filter((skill) => skill !== skillName)
+        : [...currentSelected, skillName];
+
+      const normalizedNext = availableSkills.filter((skill) =>
+        nextSelected.includes(skill),
+      );
+
+      if (normalizedNext.length === 0 && availableSkills.length > 0) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        allowedExternalSkills:
+          normalizedNext.length === availableSkills.length ? [] : normalizedNext,
+      };
+    });
+  };
+
+  const setAllowAllExternalSkills = (checked: boolean) => {
+    updateSettings("allowedExternalSkills", checked ? [] : [...resources.skills]);
   };
 
   const summaryItems = [
@@ -905,6 +941,66 @@ export function AIConfigPage() {
               }))
             }
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>外部 Skills 范围</CardTitle>
+          <CardDescription>
+            控制 chat 插件通过外部 Skills 能加载哪些扩展能力。留空表示允许全部已注册
+            Skills；如果想全部禁用，直接关闭上面的“外部 Skills”开关。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Toggle
+            checked={settings.allowedExternalSkills.length === 0}
+            onChange={setAllowAllExternalSkills}
+            label="允许全部已注册 Skills"
+          />
+
+          {resources.skills.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              当前没有已注册的外部 Skills。
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {resources.skills.map((skill) => {
+                const selected =
+                  settings.allowedExternalSkills.length === 0 ||
+                  settings.allowedExternalSkills.includes(skill);
+
+                return (
+                  <label
+                    key={skill}
+                    className={cn(
+                      "flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 text-sm transition-colors",
+                      selected
+                        ? "border-primary/45 bg-secondary/35 text-foreground"
+                        : "border-border/85 bg-card/78 text-muted-foreground hover:text-foreground",
+                      settings.allowedExternalSkills.length === 0
+                        ? "opacity-60"
+                        : "",
+                    )}
+                  >
+                    <span className="font-medium">{skill}</span>
+                    <input
+                      className="form-checkbox"
+                      type="checkbox"
+                      checked={selected}
+                      disabled={settings.allowedExternalSkills.length === 0}
+                      onChange={() => toggleAllowedExternalSkill(skill)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            关闭“允许全部已注册 Skills”后，AI 只能看到并加载下面勾选的外部
+            Skills。
+          </p>
         </CardContent>
       </Card>
 
@@ -1400,7 +1496,7 @@ export function AIConfigPage() {
           </CapabilityCard>
           <CapabilityCard
             title="Expression"
-            description="从表情资源里做更多表达匹配"
+            description="总结概括群友的发言习惯并模仿"
             enabled={personalization.expression.enabled}
             onEnabledChange={(checked) =>
               setPersonalization((prev) => ({
@@ -1420,7 +1516,7 @@ export function AIConfigPage() {
               }
             />
             <NumberField
-              label="注入条数"
+              label="最大注入条数"
               value={personalization.expression.sampleSize}
               onChange={(value) =>
                 setPersonalization((prev) => ({
