@@ -4,6 +4,13 @@ import remarkGfm from "remark-gfm";
 import { ChevronDown, Eye, EyeOff, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
@@ -44,6 +51,7 @@ interface ConfigPageRendererProps {
 }
 
 const fieldCardClass = "space-y-3";
+const emptySelectValue = "__mioku_empty_option__";
 
 function shouldIgnoreCardToggle(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -411,21 +419,31 @@ export function ConfigPageRenderer({
                 {field.required && <span className="text-destructive ml-1">*</span>}
               </Label>
             </div>
-            <select
-              id={field.key}
-              className="form-select w-full"
-              value={selectValue}
-              onChange={(e) => handleFieldChange(field, e.target.value)}
+            <Select
+              value={selectValue || emptySelectValue}
+              onValueChange={(nextValue) =>
+                handleFieldChange(
+                  field,
+                  nextValue === emptySelectValue ? "" : nextValue,
+                )
+              }
             >
-              {!field.required ? (
-                <option value="">{field.placeholder || "请选择"}</option>
-              ) : null}
-              {options.map((opt: any) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id={field.key} className="w-full">
+                <SelectValue placeholder={field.placeholder || "请选择"} />
+              </SelectTrigger>
+              <SelectContent>
+                {!field.required ? (
+                  <SelectItem value={emptySelectValue}>
+                    {field.placeholder || "请选择"}
+                  </SelectItem>
+                ) : null}
+                {options.map((opt: any) => (
+                  <SelectItem key={opt.value} value={String(opt.value)}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {field.description && (
               <p className="text-sm leading-6 text-muted-foreground">{field.description}</p>
             )}

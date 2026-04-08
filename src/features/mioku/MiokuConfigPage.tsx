@@ -3,6 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 import { useTopbar } from "@/components/layout/TopbarContext";
 import { Plus, Trash2, Save } from "lucide-react";
@@ -331,16 +338,18 @@ export function MiokuConfigPage() {
                       }
                       placeholder="实例名称"
                     />
-                    <select
-                      className="form-select"
+                    <Select
                       value={napcat.protocol}
-                      onChange={(e) =>
-                        updateNapCat(index, "protocol", e.target.value)
-                      }
+                      onValueChange={(value) => updateNapCat(index, "protocol", value)}
                     >
-                      <option value="ws">ws</option>
-                      <option value="wss">wss</option>
-                    </select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="选择协议" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ws">ws</SelectItem>
+                        <SelectItem value="wss">wss</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Input
                       value={napcat.host}
                       onChange={(e) =>

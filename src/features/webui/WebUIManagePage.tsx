@@ -17,6 +17,13 @@ import { setToken } from "@/features/auth/authSlice";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
 interface WebUIUpdateInfo {
@@ -262,20 +269,24 @@ export function WebUIManagePage() {
           </div>
           <div className="space-y-1 md:col-span-2">
             <label className="text-xs text-muted-foreground">包管理器</label>
-            <select
-              className="form-select w-full"
+            <Select
               value={settings.packageManager}
-              onChange={(e) =>
+              onValueChange={(value) =>
                 setSettings((prev) => ({
                   ...prev,
-                  packageManager: e.target.value,
+                  packageManager: value,
                 }))
               }
             >
-              <option value="bun">bun</option>
-              <option value="npm">npm</option>
-              <option value="pnpm">pnpm</option>
-            </select>
+              <SelectTrigger className="w-full" id="package-manager">
+                <SelectValue placeholder="选择包管理器" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bun">bun</SelectItem>
+                <SelectItem value="npm">npm</SelectItem>
+                <SelectItem value="pnpm">pnpm</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>

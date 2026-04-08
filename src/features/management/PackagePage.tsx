@@ -3,6 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 
 type TargetType = "plugin" | "service";
@@ -101,15 +108,19 @@ export function PackagePage({ target }: { target: TargetType }) {
             onChange={(e) => setRepoUrl(e.target.value)}
           />
           <div className="flex flex-wrap gap-2">
-            <select
-              className="h-10 rounded-md border bg-card px-3 text-sm"
+            <Select
               value={packageManager}
-              onChange={(e) => setPackageManager(e.target.value)}
+              onValueChange={setPackageManager}
             >
-              <option value="bun">bun</option>
-              <option value="pnpm">pnpm</option>
-              <option value="npm">npm</option>
-            </select>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="选择包管理器" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bun">bun</SelectItem>
+                <SelectItem value="pnpm">pnpm</SelectItem>
+                <SelectItem value="npm">npm</SelectItem>
+              </SelectContent>
+            </Select>
             <Button onClick={install}>安装</Button>
           </div>
           {message ? (
