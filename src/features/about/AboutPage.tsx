@@ -139,7 +139,7 @@ export function AboutPage() {
         size="sm"
         onClick={() =>
           window.open(
-            "https://github.com/Jerryplusy/mioku",
+            "https://github.com/mioku-lab/mioku",
             "_blank",
             "noopener,noreferrer",
           )

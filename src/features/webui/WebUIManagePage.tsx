@@ -125,7 +125,7 @@ export function WebUIManagePage() {
           size="sm"
           onClick={() =>
             window.open(
-              "https://github.com/Jerryplusy/mioku-webui",
+              "https://github.com/mioku-lab/mioku-webui",
               "_blank",
               "noopener,noreferrer",
             )
@@ -239,7 +239,9 @@ export function WebUIManagePage() {
       <Card>
         <CardHeader>
           <CardTitle>WebUI 设置</CardTitle>
-          <CardDescription>管理 WebUI 自身的端口、主机和包管理器。</CardDescription>
+          <CardDescription>
+            管理 WebUI 自身的端口、主机和包管理器。
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           <div className="space-y-1">
