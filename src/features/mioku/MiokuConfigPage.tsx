@@ -1,8 +1,11 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -15,12 +18,45 @@ import { useTopbar } from "@/components/layout/TopbarContext";
 import { Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { DatasourceMultiSelectField } from "./DatasourceMultiSelectField";
+import type { DatasourceOption } from "@/features/plugin-config/DatasourcePickerDialog";
+
+type AccessRuleConfig = {
+  whitelist: string[];
+  blacklist: string[];
+};
+
+type BootSystemConfig = {
+  likeCommand: {
+    enabled: boolean;
+    keyword: string;
+    likeTimes: number;
+    reactionEmojiId: number;
+  };
+  friend: {
+    autoApprove: boolean;
+  };
+  group: {
+    minMemberCount: number;
+    welcome: {
+      enabled: boolean;
+      mode: "ai" | "text";
+      text: string;
+      aiPrompt: string;
+    };
+  };
+  messageFilter: {
+    user: AccessRuleConfig;
+    group: AccessRuleConfig;
+  };
+};
 
 type MiokuConfig = {
   owners: number[];
   admins: number[];
   napcat: NapCatConfig[];
   plugins: string[];
+  boot: BootSystemConfig;
 };
 
 type NapCatConfig = {
@@ -31,14 +67,86 @@ type NapCatConfig = {
   token: string;
 };
 
-type ConfigTab = "owners" | "admins" | "napcat" | "plugins";
+type ConfigTab = "owners" | "admins" | "napcat" | "plugins" | "system";
+
+const emptyBootConfig: BootSystemConfig = {
+  likeCommand: {
+    enabled: true,
+    keyword: "赞我",
+    likeTimes: 10,
+    reactionEmojiId: 201,
+  },
+  friend: {
+    autoApprove: true,
+  },
+  group: {
+    minMemberCount: 0,
+    welcome: {
+      enabled: true,
+      mode: "ai",
+      text: "欢迎新人～",
+      aiPrompt: "",
+    },
+  },
+  messageFilter: {
+    user: {
+      whitelist: [],
+      blacklist: [],
+    },
+    group: {
+      whitelist: [],
+      blacklist: [],
+    },
+  },
+};
 
 const tabLabels: Record<ConfigTab, string> = {
   owners: "主人配置",
   admins: "管理员配置",
   napcat: "Onebot配置",
   plugins: "插件开关",
+  system: "系统功能",
 };
+
+function cloneConfig<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function normalizeBootConfig(
+  input?: Partial<BootSystemConfig> | null,
+): BootSystemConfig {
+  const raw = input || {};
+  const userFilterSource =
+    raw?.messageFilter?.user || (raw as any)?.messageFilter?.private;
+  return {
+    likeCommand: {
+      ...emptyBootConfig.likeCommand,
+      ...(raw.likeCommand || {}),
+    },
+    friend: {
+      ...emptyBootConfig.friend,
+      ...(raw.friend || {}),
+    },
+    group: {
+      ...emptyBootConfig.group,
+      ...(raw.group || {}),
+      welcome: {
+        ...emptyBootConfig.group.welcome,
+        ...(raw.group?.welcome || {}),
+      },
+    },
+    messageFilter: {
+      user: {
+        ...emptyBootConfig.messageFilter.user,
+        ...(userFilterSource || {}),
+      },
+      group: {
+        ...emptyBootConfig.messageFilter.group,
+        ...(raw.messageFilter?.group || {}),
+      },
+    },
+  };
+}
 
 export function MiokuConfigPage() {
   const [miokuConfig, setMiokuConfig] = useState<MiokuConfig>({
@@ -46,8 +154,11 @@ export function MiokuConfigPage() {
     admins: [],
     napcat: [],
     plugins: [],
+    boot: cloneConfig(emptyBootConfig),
   });
   const [availablePlugins, setAvailablePlugins] = useState<string[]>([]);
+  const [friendOptions, setFriendOptions] = useState<DatasourceOption[]>([]);
+  const [groupOptions, setGroupOptions] = useState<DatasourceOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<ConfigTab>("owners");
@@ -61,19 +172,32 @@ export function MiokuConfigPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [miokuRes, pluginsRes] = await Promise.all([
+      const [miokuRes, pluginsRes, friendsRes, groupsRes] = await Promise.all([
         apiFetch<{ data: MiokuConfig }>("/api/config/mioku"),
         apiFetch<{ data: string[] }>("/api/config/plugins/available"),
+        apiFetch<{ data: DatasourceOption[] }>(
+          "/api/plugin-config/datasources/qq_friends",
+        ),
+        apiFetch<{ data: DatasourceOption[] }>(
+          "/api/plugin-config/datasources/qq_groups",
+        ),
       ]);
       const config = miokuRes.data || {
         owners: [],
         admins: [],
         napcat: [],
         plugins: [],
+        boot: cloneConfig(emptyBootConfig),
       };
-      setMiokuConfig(config);
+      const normalizedConfig = {
+        ...config,
+        boot: normalizeBootConfig(config.boot),
+      };
+      setMiokuConfig(normalizedConfig);
       setAvailablePlugins(pluginsRes.data || []);
-      initialConfigRef.current = JSON.stringify(config);
+      setFriendOptions(friendsRes.data || []);
+      setGroupOptions(groupsRes.data || []);
+      initialConfigRef.current = JSON.stringify(normalizedConfig);
     } catch {
       toast.error("加载配置失败");
     } finally {
@@ -106,7 +230,10 @@ export function MiokuConfigPage() {
             className="topbar-nav-item-enter"
             style={{ animationDelay: `${index * 45}ms` }}
           >
-            <button onClick={() => setActiveTab(tab)} className={chipClass(activeTab === tab)}>
+            <button
+              onClick={() => setActiveTab(tab)}
+              className={chipClass(activeTab === tab)}
+            >
               {tabLabels[tab]}
             </button>
           </span>
@@ -141,6 +268,15 @@ export function MiokuConfigPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const updateBootConfig = (
+    updater: (boot: BootSystemConfig) => BootSystemConfig,
+  ) => {
+    setMiokuConfig((prev) => ({
+      ...prev,
+      boot: updater(prev.boot),
+    }));
   };
 
   const addOwner = () => {
@@ -223,7 +359,15 @@ export function MiokuConfigPage() {
 
   return (
     <div className="space-y-4 animate-soft-pop">
-      {activeTab === "owners" && (
+      {loading ? (
+        <Card>
+          <CardContent className="py-8 text-sm text-muted-foreground">
+            加载中...
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!loading && activeTab === "owners" && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>主人配置</CardTitle>
@@ -262,7 +406,7 @@ export function MiokuConfigPage() {
         </Card>
       )}
 
-      {activeTab === "admins" && (
+      {!loading && activeTab === "admins" && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>管理员配置</CardTitle>
@@ -301,7 +445,7 @@ export function MiokuConfigPage() {
         </Card>
       )}
 
-      {activeTab === "napcat" && (
+      {!loading && activeTab === "napcat" && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>NapCat/Onebot 实例配置</CardTitle>
@@ -340,7 +484,9 @@ export function MiokuConfigPage() {
                     />
                     <Select
                       value={napcat.protocol}
-                      onValueChange={(value) => updateNapCat(index, "protocol", value)}
+                      onValueChange={(value) =>
+                        updateNapCat(index, "protocol", value)
+                      }
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="选择协议" />
@@ -382,7 +528,7 @@ export function MiokuConfigPage() {
         </Card>
       )}
 
-      {activeTab === "plugins" && (
+      {!loading && activeTab === "plugins" && (
         <Card>
           <CardHeader>
             <CardTitle>插件开关</CardTitle>
@@ -411,6 +557,329 @@ export function MiokuConfigPage() {
         </Card>
       )}
 
+      {!loading && activeTab === "system" && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>赞我功能</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between rounded-xl border p-4">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">赞我</Label>
+                  <p className="text-sm text-muted-foreground">
+                    开启后收到指定指令会给发送者点赞
+                  </p>
+                </div>
+                <Switch
+                  checked={miokuConfig.boot.likeCommand.enabled}
+                  onCheckedChange={(checked) =>
+                    updateBootConfig((boot) => ({
+                      ...boot,
+                      likeCommand: { ...boot.likeCommand, enabled: checked },
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="boot-like-keyword">触发指令</Label>
+                  <Input
+                    id="boot-like-keyword"
+                    value={miokuConfig.boot.likeCommand.keyword}
+                    onChange={(event) =>
+                      updateBootConfig((boot) => ({
+                        ...boot,
+                        likeCommand: {
+                          ...boot.likeCommand,
+                          keyword: event.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="赞我"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="boot-like-times">点赞次数</Label>
+                  <NumberInput
+                    id="boot-like-times"
+                    value={miokuConfig.boot.likeCommand.likeTimes}
+                    onValueChange={(value) => {
+                      if (value == null) return;
+                      updateBootConfig((boot) => ({
+                        ...boot,
+                        likeCommand: { ...boot.likeCommand, likeTimes: value },
+                      }));
+                    }}
+                    placeholder="10"
+                    className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="boot-like-emoji-id">贴表情 ID</Label>
+                  <NumberInput
+                    id="boot-like-emoji-id"
+                    value={miokuConfig.boot.likeCommand.reactionEmojiId}
+                    onValueChange={(value) => {
+                      if (value == null) return;
+                      updateBootConfig((boot) => ({
+                        ...boot,
+                        likeCommand: {
+                          ...boot.likeCommand,
+                          reactionEmojiId: value,
+                        },
+                      }));
+                    }}
+                    placeholder="201"
+                    className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    默认 id 为 201
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>好友与群设置</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between rounded-xl border p-4">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">
+                    自动通过好友申请
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    开启后会自动同意新的好友申请
+                  </p>
+                </div>
+                <Switch
+                  checked={miokuConfig.boot.friend.autoApprove}
+                  onCheckedChange={(checked) =>
+                    updateBootConfig((boot) => ({
+                      ...boot,
+                      friend: { ...boot.friend, autoApprove: checked },
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="boot-group-min-members">加群最低人数</Label>
+                <NumberInput
+                  id="boot-group-min-members"
+                  value={miokuConfig.boot.group.minMemberCount}
+                  onValueChange={(value) => {
+                    if (value == null) return;
+                    updateBootConfig((boot) => ({
+                      ...boot,
+                      group: { ...boot.group, minMemberCount: value },
+                    }));
+                  }}
+                  placeholder="0"
+                  className="max-w-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <p className="text-sm text-muted-foreground">
+                  机器人新进一个群时检查。填 0 表示不限制，低于阈值自动退群
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>消息白名单与黑名单</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <p className="text-sm text-muted-foreground">
+                某一类配置了白名单后，该类黑名单自动失效，主人和管理员不受这些名单限制。
+              </p>
+
+              <DatasourceMultiSelectField
+                id="boot-user-whitelist"
+                label="用户白名单"
+                description="只有这些人可以用"
+                placeholder="点击选择用户"
+                source="qq_friends"
+                options={friendOptions}
+                value={miokuConfig.boot.messageFilter.user.whitelist}
+                onChange={(value) =>
+                  updateBootConfig((boot) => ({
+                    ...boot,
+                    messageFilter: {
+                      ...boot.messageFilter,
+                      user: { ...boot.messageFilter.user, whitelist: value },
+                    },
+                  }))
+                }
+              />
+
+              <DatasourceMultiSelectField
+                id="boot-user-blacklist"
+                label="用户黑名单"
+                description="这些人不能使用"
+                placeholder="点击选择用户"
+                source="qq_friends"
+                options={friendOptions}
+                value={miokuConfig.boot.messageFilter.user.blacklist}
+                onChange={(value) =>
+                  updateBootConfig((boot) => ({
+                    ...boot,
+                    messageFilter: {
+                      ...boot.messageFilter,
+                      user: { ...boot.messageFilter.user, blacklist: value },
+                    },
+                  }))
+                }
+              />
+
+              <DatasourceMultiSelectField
+                id="boot-group-whitelist"
+                label="群聊白名单"
+                description="只有这些群可以用"
+                placeholder="点击选择群聊"
+                source="qq_groups"
+                options={groupOptions}
+                value={miokuConfig.boot.messageFilter.group.whitelist}
+                onChange={(value) =>
+                  updateBootConfig((boot) => ({
+                    ...boot,
+                    messageFilter: {
+                      ...boot.messageFilter,
+                      group: { ...boot.messageFilter.group, whitelist: value },
+                    },
+                  }))
+                }
+              />
+
+              <DatasourceMultiSelectField
+                id="boot-group-blacklist"
+                label="群聊黑名单"
+                description="这些群不能用"
+                placeholder="点击选择群聊"
+                source="qq_groups"
+                options={groupOptions}
+                value={miokuConfig.boot.messageFilter.group.blacklist}
+                onChange={(value) =>
+                  updateBootConfig((boot) => ({
+                    ...boot,
+                    messageFilter: {
+                      ...boot.messageFilter,
+                      group: { ...boot.messageFilter.group, blacklist: value },
+                    },
+                  }))
+                }
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>新人入群欢迎</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between rounded-xl border p-4">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">启用入群欢迎</Label>
+                  <p className="text-sm text-muted-foreground">
+                    有新人入群时发送欢迎消息
+                  </p>
+                </div>
+                <Switch
+                  checked={miokuConfig.boot.group.welcome.enabled}
+                  onCheckedChange={(checked) =>
+                    updateBootConfig((boot) => ({
+                      ...boot,
+                      group: {
+                        ...boot.group,
+                        welcome: { ...boot.group.welcome, enabled: checked },
+                      },
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2 max-w-sm">
+                <Label htmlFor="boot-welcome-mode">欢迎模式</Label>
+                <Select
+                  value={miokuConfig.boot.group.welcome.mode}
+                  onValueChange={(value: "ai" | "text") =>
+                    updateBootConfig((boot) => ({
+                      ...boot,
+                      group: {
+                        ...boot.group,
+                        welcome: { ...boot.group.welcome, mode: value },
+                      },
+                    }))
+                  }
+                >
+                  <SelectTrigger id="boot-welcome-mode">
+                    <SelectValue placeholder="选择欢迎模式" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ai">使用AI生成</SelectItem>
+                    <SelectItem value="text">固定文本</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="boot-welcome-text">固定欢迎文本</Label>
+                <Textarea
+                  id="boot-welcome-text"
+                  value={miokuConfig.boot.group.welcome.text}
+                  onChange={(event) =>
+                    updateBootConfig((boot) => ({
+                      ...boot,
+                      group: {
+                        ...boot.group,
+                        welcome: {
+                          ...boot.group.welcome,
+                          text: event.target.value,
+                        },
+                      },
+                    }))
+                  }
+                  placeholder="欢迎新人～"
+                  className="min-h-28"
+                />
+                <p className="text-sm text-muted-foreground">
+                  支持 <code>{"{user}"}</code> 和 <code>{"{group}"}</code>{" "}
+                  占位符。
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="boot-welcome-ai-prompt">AI欢迎额外提示词</Label>
+                <Textarea
+                  id="boot-welcome-ai-prompt"
+                  value={miokuConfig.boot.group.welcome.aiPrompt}
+                  onChange={(event) =>
+                    updateBootConfig((boot) => ({
+                      ...boot,
+                      group: {
+                        ...boot.group,
+                        welcome: {
+                          ...boot.group.welcome,
+                          aiPrompt: event.target.value,
+                        },
+                      },
+                    }))
+                  }
+                  placeholder="例如：提醒新成员查看群公告"
+                  className="min-h-28"
+                />
+                <p className="text-sm text-muted-foreground">
+                  作为额外要求传给模型，默认留空即可
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
