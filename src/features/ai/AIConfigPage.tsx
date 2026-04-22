@@ -103,8 +103,8 @@ type PersonalizationConfig = {
   };
   memory: {
     enabled: boolean;
-    maxIterations: number;
-    timeoutMs: number;
+    groupHistoryLimit: number;
+    userHistoryLimit: number;
   };
   topic: {
     enabled: boolean;
@@ -227,8 +227,8 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
   },
   memory: {
     enabled: true,
-    maxIterations: 3,
-    timeoutMs: 15000,
+    groupHistoryLimit: 300,
+    userHistoryLimit: 100,
   },
   topic: {
     enabled: true,
@@ -1293,7 +1293,7 @@ export function AIConfigPage() {
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <CapabilityCard
             title="Memory"
-            description="允许 bot 做短时记忆推理"
+            description="主模型按需调用回忆工具，工作模型检索历史记录"
             enabled={personalization.memory.enabled}
             onEnabledChange={(checked) =>
               setPersonalization((prev) => ({
@@ -1303,23 +1303,22 @@ export function AIConfigPage() {
             }
           >
             <NumberField
-              label="最大轮数"
-              value={personalization.memory.maxIterations}
+              label="群聊回忆条数"
+              value={personalization.memory.groupHistoryLimit}
               onChange={(value) =>
                 setPersonalization((prev) => ({
                   ...prev,
-                  memory: { ...prev.memory, maxIterations: value },
+                  memory: { ...prev.memory, groupHistoryLimit: value },
                 }))
               }
             />
             <NumberField
-              label="超时 (分钟)"
-              value={personalization.memory.timeoutMs}
-              msToMin={true}
+              label="用户历史条数"
+              value={personalization.memory.userHistoryLimit}
               onChange={(value) =>
                 setPersonalization((prev) => ({
                   ...prev,
-                  memory: { ...prev.memory, timeoutMs: value },
+                  memory: { ...prev.memory, userHistoryLimit: value },
                 }))
               }
             />
