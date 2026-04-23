@@ -1630,11 +1630,7 @@ export function AIConfigPage() {
                   webReader: { ...prev.webReader, useWorkingModel: checked },
                 }))
               }
-              label={
-                settings.webReader.useWorkingModel
-                  ? "使用工作模型"
-                  : "使用主模型"
-              }
+              label="使用工作模型概括总结"
             />
             <NumberField
               label="读取超时 (秒)"
@@ -1772,6 +1768,7 @@ function Toggle({
         "flex min-h-10 items-center gap-3 text-sm",
       )}
       onClick={(e) => {
+        e.stopPropagation();
         if (shouldIgnoreCardToggle(e.target)) {
           return;
         }
@@ -1780,6 +1777,7 @@ function Toggle({
       onKeyDown={(e) => {
         if (e.key === " " || e.key === "Enter") {
           e.preventDefault();
+          e.stopPropagation();
           onChange(!checked);
         }
       }}
