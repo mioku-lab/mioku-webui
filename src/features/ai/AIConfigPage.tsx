@@ -108,9 +108,8 @@ type PersonalizationConfig = {
   };
   topic: {
     enabled: boolean;
-    messageThreshold: number;
-    timeThresholdMs: number;
-    maxTopicsPerSession: number;
+    windowHours: number;
+    historyWindowCount: number;
   };
   planner: {
     enabled: boolean;
@@ -232,9 +231,8 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
   },
   topic: {
     enabled: true,
-    messageThreshold: 50,
-    timeThresholdMs: 28800000,
-    maxTopicsPerSession: 20,
+    windowHours: 5,
+    historyWindowCount: 3,
   },
   planner: {
     enabled: true,
@@ -1335,7 +1333,7 @@ export function AIConfigPage() {
           </CapabilityCard>
           <CapabilityCard
             title="Topic"
-            description="自动提炼群聊中反复出现的话题"
+            description="按固定时间窗口归纳群友历史话题，作为当前可见历史之外的背景参考"
             enabled={personalization.topic.enabled}
             onEnabledChange={(checked) =>
               setPersonalization((prev) => ({
@@ -1345,33 +1343,22 @@ export function AIConfigPage() {
             }
           >
             <NumberField
-              label="消息阈值"
-              value={personalization.topic.messageThreshold}
+              label="窗口时长 (小时)"
+              value={personalization.topic.windowHours}
               onChange={(value) =>
                 setPersonalization((prev) => ({
                   ...prev,
-                  topic: { ...prev.topic, messageThreshold: value },
+                  topic: { ...prev.topic, windowHours: value },
                 }))
               }
             />
             <NumberField
-              label="时间阈值 (分钟)"
-              value={personalization.topic.timeThresholdMs}
-              msToMin={true}
+              label="回填窗口数"
+              value={personalization.topic.historyWindowCount}
               onChange={(value) =>
                 setPersonalization((prev) => ({
                   ...prev,
-                  topic: { ...prev.topic, timeThresholdMs: value },
-                }))
-              }
-            />
-            <NumberField
-              label="最多话题数"
-              value={personalization.topic.maxTopicsPerSession}
-              onChange={(value) =>
-                setPersonalization((prev) => ({
-                  ...prev,
-                  topic: { ...prev.topic, maxTopicsPerSession: value },
+                  topic: { ...prev.topic, historyWindowCount: value },
                 }))
               }
             />
