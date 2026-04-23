@@ -130,7 +130,7 @@ type PersonalizationConfig = {
   };
   expression: {
     enabled: boolean;
-    maxExpressions: number;
+    learnAfterMessages: number;
     sampleSize: number;
   };
 };
@@ -254,7 +254,7 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
   },
   expression: {
     enabled: true,
-    maxExpressions: 100,
+    learnAfterMessages: 100,
     sampleSize: 8,
   },
 };
@@ -340,6 +340,12 @@ export function AIConfigPage() {
       ]);
 
       const nextBase = { ...emptyBaseConfig, ...(baseRes.data || {}) };
+      const rawExpression = (personalizationRes.data?.expression || {}) as {
+        enabled?: boolean;
+        sampleSize?: number;
+        learnAfterMessages?: number;
+        maxExpressions?: number;
+      };
       const nextPersonalization = {
         ...emptyPersonalizationConfig,
         ...(personalizationRes.data || {}),
@@ -379,7 +385,11 @@ export function AIConfigPage() {
         },
         expression: {
           ...emptyPersonalizationConfig.expression,
-          ...(personalizationRes.data?.expression || {}),
+          ...rawExpression,
+          learnAfterMessages:
+            rawExpression.learnAfterMessages ??
+            rawExpression.maxExpressions ??
+            emptyPersonalizationConfig.expression.learnAfterMessages,
         },
       };
       const nextSettings = {
@@ -1502,7 +1512,7 @@ export function AIConfigPage() {
           </CapabilityCard>
           <CapabilityCard
             title="Expression"
-            description="总结概括群友的发言习惯并模仿"
+            description="按用户学习表达习惯，在该用户触发对话时注入供回复参考"
             enabled={personalization.expression.enabled}
             onEnabledChange={(checked) =>
               setPersonalization((prev) => ({
@@ -1512,12 +1522,15 @@ export function AIConfigPage() {
             }
           >
             <NumberField
-              label="存储上限"
-              value={personalization.expression.maxExpressions}
+              label="单用户触发阈值（消息数）"
+              value={personalization.expression.learnAfterMessages}
               onChange={(value) =>
                 setPersonalization((prev) => ({
                   ...prev,
-                  expression: { ...prev.expression, maxExpressions: value },
+                  expression: {
+                    ...prev.expression,
+                    learnAfterMessages: value,
+                  },
                 }))
               }
             />
