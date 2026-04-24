@@ -23,6 +23,8 @@ import { apiFetch } from "@/lib/api";
 import { useTopbar } from "@/components/layout/TopbarContext";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { cn } from "@/lib/utils";
+import { DatasourceMultiSelectField } from "@/features/mioku/DatasourceMultiSelectField";
+import type { DatasourceOption } from "@/features/plugin-config/DatasourcePickerDialog";
 
 type Strength = "low" | "medium" | "high";
 
@@ -258,14 +260,61 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
 };
 
 function linesToArray(value: string): string[] {
-  return value
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
     .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean);
+    .map((item) => item.trim());
 }
 
 function arrayToLines(value: string[]): string {
   return value.join("\n");
+}
+
+function compactLineArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function sanitizeSettingsForSave(settings: SettingsConfig): SettingsConfig {
+  return {
+    ...settings,
+    nicknames: compactLineArray(settings.nicknames),
+    blacklistGroups: compactLineArray(settings.blacklistGroups),
+    whitelistGroups: compactLineArray(settings.whitelistGroups),
+    imageAnalysisBlacklistUsers: compactLineArray(
+      settings.imageAnalysisBlacklistUsers,
+    ),
+    webReader: {
+      ...settings.webReader,
+      allowedContentTypes: compactLineArray(settings.webReader.allowedContentTypes),
+    },
+  };
+}
+
+function sanitizePersonalizationForSave(
+  personalization: PersonalizationConfig,
+): PersonalizationConfig {
+  return {
+    ...personalization,
+    personality: {
+      ...personalization.personality,
+      states: compactLineArray(personalization.personality.states),
+    },
+    replyStyle: {
+      ...personalization.replyStyle,
+      multipleStyles: compactLineArray(personalization.replyStyle.multipleStyles),
+    },
+    planner: {
+      ...personalization.planner,
+      idleCheckBotIds: compactLineArray(personalization.planner.idleCheckBotIds),
+    },
+    emoji: {
+      ...personalization.emoji,
+      characters: compactLineArray(personalization.emoji.characters),
+    },
+  };
 }
 
 function normalizeEscapedNewlines(value: string): string {
@@ -307,6 +356,7 @@ export function AIConfigPage() {
     skills: [],
     tools: [],
   });
+  const [groupOptions, setGroupOptions] = useState<DatasourceOption[]>([]);
   const [activeTab, setActiveTab] = useState<ConfigTab>("model");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -327,6 +377,7 @@ export function AIConfigPage() {
         settingsRes,
         instancesRes,
         skillsRes,
+        groupsRes,
       ] = await Promise.all([
         apiFetch<{ data: BaseConfig }>("/api/ai/base"),
         apiFetch<{ data: PersonalizationConfig }>("/api/ai/personalization"),
@@ -334,6 +385,9 @@ export function AIConfigPage() {
         apiFetch<{ data: string[] }>("/api/ai/instances"),
         apiFetch<{ data: { skills: string[]; tools: string[] } }>(
           "/api/ai/skills",
+        ),
+        apiFetch<{ data: DatasourceOption[] }>(
+          "/api/plugin-config/datasources/qq_groups",
         ),
       ]);
 
@@ -419,6 +473,7 @@ export function AIConfigPage() {
         skills: skillsRes.data?.skills || [],
         tools: skillsRes.data?.tools || [],
       });
+      setGroupOptions(groupsRes.data || []);
 
       initialSnapshotRef.current = JSON.stringify({
         base: nextBase,
@@ -450,6 +505,8 @@ export function AIConfigPage() {
   async function saveAll() {
     setSaving(true);
     try {
+      const nextSettings = sanitizeSettingsForSave(settings);
+      const nextPersonalization = sanitizePersonalizationForSave(personalization);
       await Promise.all([
         apiFetch("/api/ai/base", {
           method: "PUT",
@@ -457,17 +514,19 @@ export function AIConfigPage() {
         }),
         apiFetch("/api/ai/personalization", {
           method: "PUT",
-          body: JSON.stringify(personalization),
+          body: JSON.stringify(nextPersonalization),
         }),
         apiFetch("/api/ai/settings", {
           method: "PUT",
-          body: JSON.stringify(settings),
+          body: JSON.stringify(nextSettings),
         }),
       ]);
+      setPersonalization(nextPersonalization);
+      setSettings(nextSettings);
       initialSnapshotRef.current = JSON.stringify({
         base,
-        personalization,
-        settings,
+        personalization: nextPersonalization,
+        settings: nextSettings,
       });
       setHasChanges(false);
       toast.success("设置已保存~");
@@ -1137,25 +1196,27 @@ export function AIConfigPage() {
             支持按群号或用户号限制 chat 插件的触发范围
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <Field label="群聊黑名单" hint="每行一个群号，命中后不回复">
-            <Textarea
-              className="min-h-32"
-              value={arrayToLines(settings.blacklistGroups)}
-              onChange={(e) =>
-                updateSettings("blacklistGroups", linesToArray(e.target.value))
-              }
-            />
-          </Field>
-          <Field label="群聊白名单" hint="非空时仅对白名单群生效">
-            <Textarea
-              className="min-h-32"
-              value={arrayToLines(settings.whitelistGroups)}
-              onChange={(e) =>
-                updateSettings("whitelistGroups", linesToArray(e.target.value))
-              }
-            />
-          </Field>
+        <CardContent className="space-y-6">
+          <DatasourceMultiSelectField
+            id="ai-group-whitelist"
+            label="群聊白名单"
+            description="非空时仅对白名单群生效"
+            placeholder="点击选择群聊"
+            source="qq_groups"
+            options={groupOptions}
+            value={settings.whitelistGroups}
+            onChange={(value) => updateSettings("whitelistGroups", value)}
+          />
+          <DatasourceMultiSelectField
+            id="ai-group-blacklist"
+            label="群聊黑名单"
+            description="命中后不回复"
+            placeholder="点击选择群聊"
+            source="qq_groups"
+            options={groupOptions}
+            value={settings.blacklistGroups}
+            onChange={(value) => updateSettings("blacklistGroups", value)}
+          />
           <Field
             label="图片分析黑名单用户"
             hint="每行一个 QQ 号，这些人发的图片不会进入分析"
@@ -1762,6 +1823,9 @@ function Toggle({
         onChange(!checked);
       }}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget && shouldIgnoreCardToggle(e.target)) {
+          return;
+        }
         if (e.key === " " || e.key === "Enter") {
           e.preventDefault();
           e.stopPropagation();
@@ -1804,6 +1868,9 @@ function ToggleField({
         onChange(!checked);
       }}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget && shouldIgnoreCardToggle(e.target)) {
+          return;
+        }
         if (e.key === " " || e.key === "Enter") {
           e.preventDefault();
           onChange(!checked);
@@ -1915,6 +1982,9 @@ function CapabilityCard({
         onEnabledChange(!enabled);
       }}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget && shouldIgnoreCardToggle(e.target)) {
+          return;
+        }
         if (e.key === " " || e.key === "Enter") {
           e.preventDefault();
           onEnabledChange(!enabled);
