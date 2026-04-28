@@ -68,7 +68,6 @@ type SettingsConfig = {
   whitelistGroups: string[];
   imageAnalysisBlacklistUsers: string[];
   maxSessions: number;
-  enableGroupAdmin: boolean;
   enableExternalSkills: boolean;
   allowedExternalSkills: string[];
   stream: boolean;
@@ -191,7 +190,6 @@ const emptySettingsConfig: SettingsConfig = {
   whitelistGroups: [],
   imageAnalysisBlacklistUsers: [],
   maxSessions: 100,
-  enableGroupAdmin: true,
   enableExternalSkills: true,
   allowedExternalSkills: [],
   stream: true,
@@ -983,12 +981,6 @@ export function AIConfigPage() {
                 audio: { ...prev.audio, enabled: checked },
               }))
             }
-          />
-          <ToggleField
-            title="群管理员权限"
-            description="允许群管理员获得额外控制能力"
-            checked={settings.enableGroupAdmin}
-            onChange={(checked) => updateSettings("enableGroupAdmin", checked)}
           />
           <ToggleField
             title="外部 Skills"
