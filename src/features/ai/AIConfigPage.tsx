@@ -66,7 +66,7 @@ type SettingsConfig = {
   };
   blacklistGroups: string[];
   whitelistGroups: string[];
-  imageAnalysisBlacklistUsers: string[];
+  mediaAnalysisBlacklistUsers: string[];
   maxSessions: number;
   enableExternalSkills: boolean;
   allowedExternalSkills: string[];
@@ -188,7 +188,7 @@ const emptySettingsConfig: SettingsConfig = {
   },
   blacklistGroups: [],
   whitelistGroups: [],
-  imageAnalysisBlacklistUsers: [],
+  mediaAnalysisBlacklistUsers: [],
   maxSessions: 100,
   enableExternalSkills: true,
   allowedExternalSkills: [],
@@ -276,17 +276,21 @@ function compactLineArray(value: unknown): string[] {
 }
 
 function sanitizeSettingsForSave(settings: SettingsConfig): SettingsConfig {
+  const { imageAnalysisBlacklistUsers: _legacy, ...nextSettings } =
+    settings as SettingsConfig & { imageAnalysisBlacklistUsers?: string[] };
   return {
-    ...settings,
-    nicknames: compactLineArray(settings.nicknames),
-    blacklistGroups: compactLineArray(settings.blacklistGroups),
-    whitelistGroups: compactLineArray(settings.whitelistGroups),
-    imageAnalysisBlacklistUsers: compactLineArray(
-      settings.imageAnalysisBlacklistUsers,
+    ...nextSettings,
+    nicknames: compactLineArray(nextSettings.nicknames),
+    blacklistGroups: compactLineArray(nextSettings.blacklistGroups),
+    whitelistGroups: compactLineArray(nextSettings.whitelistGroups),
+    mediaAnalysisBlacklistUsers: compactLineArray(
+      nextSettings.mediaAnalysisBlacklistUsers,
     ),
     webReader: {
-      ...settings.webReader,
-      allowedContentTypes: compactLineArray(settings.webReader.allowedContentTypes),
+      ...nextSettings.webReader,
+      allowedContentTypes: compactLineArray(
+        nextSettings.webReader.allowedContentTypes,
+      ),
     },
   };
 }
@@ -302,11 +306,15 @@ function sanitizePersonalizationForSave(
     },
     replyStyle: {
       ...personalization.replyStyle,
-      multipleStyles: compactLineArray(personalization.replyStyle.multipleStyles),
+      multipleStyles: compactLineArray(
+        personalization.replyStyle.multipleStyles,
+      ),
     },
     planner: {
       ...personalization.planner,
-      idleCheckBotIds: compactLineArray(personalization.planner.idleCheckBotIds),
+      idleCheckBotIds: compactLineArray(
+        personalization.planner.idleCheckBotIds,
+      ),
     },
     emoji: {
       ...personalization.emoji,
@@ -445,6 +453,10 @@ export function AIConfigPage() {
       const nextSettings = {
         ...emptySettingsConfig,
         ...(settingsRes.data || {}),
+        mediaAnalysisBlacklistUsers:
+          (settingsRes.data as any)?.mediaAnalysisBlacklistUsers ??
+          (settingsRes.data as any)?.imageAnalysisBlacklistUsers ??
+          [],
         searxng: {
           ...emptySettingsConfig.searxng,
           ...(settingsRes.data?.searxng || {}),
@@ -504,7 +516,8 @@ export function AIConfigPage() {
     setSaving(true);
     try {
       const nextSettings = sanitizeSettingsForSave(settings);
-      const nextPersonalization = sanitizePersonalizationForSave(personalization);
+      const nextPersonalization =
+        sanitizePersonalizationForSave(personalization);
       await Promise.all([
         apiFetch("/api/ai/base", {
           method: "PUT",
@@ -628,13 +641,18 @@ export function AIConfigPage() {
       return {
         ...prev,
         allowedExternalSkills:
-          normalizedNext.length === availableSkills.length ? [] : normalizedNext,
+          normalizedNext.length === availableSkills.length
+            ? []
+            : normalizedNext,
       };
     });
   };
 
   const setAllowAllExternalSkills = (checked: boolean) => {
-    updateSettings("allowedExternalSkills", checked ? [] : [...resources.skills]);
+    updateSettings(
+      "allowedExternalSkills",
+      checked ? [] : [...resources.skills],
+    );
   };
 
   const summaryItems = [
@@ -1014,7 +1032,8 @@ export function AIConfigPage() {
         <CardHeader>
           <CardTitle>外部 Skills 范围</CardTitle>
           <CardDescription>
-            控制 chat 插件通过外部 Skills 能加载哪些扩展能力。留空表示允许全部已注册
+            控制 chat 插件通过外部 Skills
+            能加载哪些扩展能力。留空表示允许全部已注册
             Skills；如果想全部禁用，直接关闭上面的“外部 Skills”开关。
           </CardDescription>
         </CardHeader>
@@ -1209,16 +1228,17 @@ export function AIConfigPage() {
             value={settings.blacklistGroups}
             onChange={(value) => updateSettings("blacklistGroups", value)}
           />
+
           <Field
-            label="图片分析黑名单用户"
-            hint="每行一个 QQ 号，这些人发的图片不会进入分析"
+            label="媒体分析黑名单用户"
+            hint="每行一个 QQ 号，这些人发的图片、视频、转发、卡片和群公告不会进入分析"
           >
             <Textarea
               className="min-h-32"
-              value={arrayToLines(settings.imageAnalysisBlacklistUsers)}
+              value={arrayToLines(settings.mediaAnalysisBlacklistUsers)}
               onChange={(e) =>
                 updateSettings(
-                  "imageAnalysisBlacklistUsers",
+                  "mediaAnalysisBlacklistUsers",
                   linesToArray(e.target.value),
                 )
               }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Search, Users, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,10 +156,10 @@ export function DatasourcePickerDialog({
     return null;
   }
 
-  return (
+  return createPortal(
     <div
       className={cn(
-        "fixed inset-0 z-50 flex items-center justify-center transition-all duration-200",
+        "fixed left-0 top-0 z-[100] flex h-dvh w-dvw items-center justify-center transition-all duration-200",
         visible ? "bg-black/45 backdrop-blur-sm" : "bg-transparent",
       )}
       onClick={() => {
@@ -298,6 +299,7 @@ export function DatasourcePickerDialog({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
