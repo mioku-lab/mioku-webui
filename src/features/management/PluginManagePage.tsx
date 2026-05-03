@@ -544,7 +544,8 @@ export function PluginManagePage() {
             <CardTitle>插件总览</CardTitle>
             <CardDescription>点击某插件查看其详情 :)</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {plugins.map((plugin) => (
               <button
                 key={plugin.name}
@@ -554,7 +555,7 @@ export function PluginManagePage() {
                   setMode("detail");
                   loadDetail(plugin.name).then();
                 }}
-                className="group w-full rounded-xl border bg-card/70 p-3 text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+                className="group rounded-xl border bg-card/70 p-3 text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0">
@@ -634,8 +635,9 @@ export function PluginManagePage() {
               </button>
             ))}
             {!loadingOverview && plugins.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无插件</p>
+              <p className="col-span-2 text-sm text-muted-foreground">暂无插件</p>
             ) : null}
+            </div>
           </CardContent>
         </Card>
       ) : null}

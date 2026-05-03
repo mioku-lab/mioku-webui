@@ -25,6 +25,38 @@ import { toast } from "@/lib/toast";
 type StoreViewMode = "list" | "detail" | "url-install";
 type StoreType = "plugin" | "service" | "all";
 
+const PAGE_SIZE = 12;
+const NPM_SEARCH_URL = "https://registry.npmjs.org/-/v1/search";
+const NPM_PACKAGE_URL = "https://registry.npmjs.org";
+const GITHUB_RAW = "https://raw.githubusercontent.com/mioku-lab/mioku/main";
+
+interface OfficialEntry {
+  npm?: string;
+  builtin?: boolean;
+}
+
+interface OfficialRegistry {
+  plugins: Record<string, OfficialEntry>;
+  services: Record<string, OfficialEntry>;
+}
+
+interface NpmSearchObject {
+  package: {
+    name: string;
+    description?: string;
+    version?: string;
+    keywords?: string[];
+    date?: string;
+    links?: {
+      npm?: string;
+      repository?: string;
+      homepage?: string;
+    };
+  };
+  searchScore?: number;
+  score?: { final?: number };
+}
+
 interface StoreItem {
   name: string;
   npm: string;
@@ -39,16 +71,7 @@ interface StoreItem {
   homepage: string;
   npmUrl: string;
   date: string;
-}
-
-interface StoreSearchResponse {
-  items: StoreItem[];
-  total: number;
-  offset: number;
-  limit: number;
-  hasMore: boolean;
-  q: string;
-  type: StoreType;
+  searchScore: number;
 }
 
 interface StorePackageDetail extends StoreItem {
@@ -70,7 +93,27 @@ interface InstalledPlugin {
   requiredServices: string[];
 }
 
-const PAGE_SIZE = 12;
+type InstalledService = InstalledPlugin;
+
+function inferType(name: string): "plugin" | "service" | null {
+  if (name.startsWith("mioku-plugin-")) return "plugin";
+  if (name.startsWith("mioku-service-")) return "service";
+  return null;
+}
+
+function stripPrefix(name: string, type: "plugin" | "service"): string {
+  const prefix = type === "plugin" ? "mioku-plugin-" : "mioku-service-";
+  return name.startsWith(prefix) ? name.slice(prefix.length) : name;
+}
+
+function normalizeKeywords(keywords: unknown): string[] {
+  if (!Array.isArray(keywords)) return [];
+  return keywords.map((k) => String(k));
+}
+
+function extractTags(keywords: string[]): string[] {
+  return keywords.filter((k) => k !== "mioku");
+}
 
 function toBrowserRepoUrl(raw: string): string {
   const value = String(raw || "").trim();
@@ -89,25 +132,64 @@ function toBrowserRepoUrl(raw: string): string {
   return value.replace(/^git\+/, "").replace(/\.git$/, "");
 }
 
-function uniqueStrings(values: string[]): string[] {
-  return Array.from(new Set(values.filter(Boolean)));
-}
-
 function formatTag(tag: string): string {
   return tag.replace(/^mioku-/, "");
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+async function loadOfficialRegistry(): Promise<OfficialRegistry> {
+  try {
+    return await fetchJson<OfficialRegistry>(`${GITHUB_RAW}/official-registry.json`);
+  } catch {
+    return { plugins: {}, services: {} };
+  }
+}
+
+async function searchNpmPackages(): Promise<NpmSearchObject[]> {
+  const url = new URL(NPM_SEARCH_URL);
+  url.searchParams.set("text", "mioku");
+  url.searchParams.set("size", "200");
+
+  const data = await fetchJson<{ objects?: NpmSearchObject[] }>(url.toString());
+  return data.objects || [];
+}
+
+async function fetchBuiltinPkgJson(type: "plugin" | "service", key: string): Promise<any> {
+  const dir = type === "plugin" ? `plugins/${key}` : `src/services/${key}`;
+  try {
+    return await fetchJson<any>(`${GITHUB_RAW}/${dir}/package.json`);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchNpmPackage(name: string): Promise<any> {
+  return fetchJson<any>(`${NPM_PACKAGE_URL}/${encodeURIComponent(name)}`);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
 }
 
 export function PluginStorePage() {
   const { setLeftContent, setRightContent } = useTopbar();
 
   const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[]>([]);
+  const [installedServices, setInstalledServices] = useState<InstalledService[]>([]);
   const [mode, setMode] = useState<StoreViewMode>("list");
   const [activeType, setActiveType] = useState<StoreType>("all");
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [listData, setListData] = useState<StoreSearchResponse | null>(null);
+  const [allItems, setAllItems] = useState<StoreItem[]>([]);
   const [loadingList, setLoadingList] = useState(false);
+
+  const [officialServices, setOfficialServices] = useState<Record<string, string>>({});
 
   const [selectedPackage, setSelectedPackage] = useState("");
   const [detail, setDetail] = useState<StorePackageDetail | null>(null);
@@ -121,19 +203,28 @@ export function PluginStorePage() {
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [servicePickerMissing, setServicePickerMissing] = useState<string[]>([]);
   const [servicePickerCustomUrl, setServicePickerCustomUrl] = useState("");
-  const [officialServices, setOfficialServices] = useState<Record<string, string>>({});
+
   const navAnimSeedRef = useRef(0);
   const [navAnimSeed, setNavAnimSeed] = useState(0);
 
-  const offset = (page - 1) * PAGE_SIZE;
+  const loadInstalled = async () => {
+    try {
+      const [pluginsRes, servicesRes] = await Promise.all([
+        apiFetch<{ ok: true; data: InstalledPlugin[] }>("/api/manage/plugins"),
+        apiFetch<{ ok: true; data: InstalledService[] }>("/api/manage/services"),
+      ]);
+      setInstalledPlugins(pluginsRes.data || []);
+      setInstalledServices(servicesRes.data || []);
+    } catch {
+      // silent
+    }
+  };
 
-  const loadOfficial = async () => {
+  const loadOfficialServices = async () => {
     try {
       const res = await apiFetch<{
         ok: true;
-        data: {
-          services?: Record<string, { npm: string }>;
-        };
+        data: { services?: Record<string, { npm: string }> };
       }>("/api/store/official");
       const next: Record<string, string> = {};
       for (const [name, entry] of Object.entries(res.data?.services || {})) {
@@ -145,36 +236,115 @@ export function PluginStorePage() {
     }
   };
 
-  const loadInstalled = async () => {
+  const loadStore = async () => {
+    setLoadingList(true);
     try {
-      const res = await apiFetch<{ ok: true; data: InstalledPlugin[] }>(
-        "/api/manage/plugins",
-      );
-      setInstalledPlugins(res.data || []);
-    } catch {
-      // silent
-    }
-  };
+      const [registry, npmResults] = await Promise.all([
+        loadOfficialRegistry(),
+        searchNpmPackages(),
+      ]);
 
-  const loadList = async (options?: { silent?: boolean }) => {
-    if (!options?.silent) setLoadingList(true);
-    try {
-      const params = new URLSearchParams({
-        type: activeType,
-        q: searchQuery,
-        offset: String(offset),
-        limit: String(PAGE_SIZE),
+      const officialPlugins = registry.plugins || {};
+      const officialServices = registry.services || {};
+      const seen = new Map<string, StoreItem>();
+
+      for (const obj of npmResults) {
+        const pkg = obj.package;
+        if (!pkg) continue;
+        const npm = String(pkg.name || "").trim();
+        if (!npm || seen.has(npm)) continue;
+
+        const type = inferType(npm);
+        if (!type) continue;
+
+        const keywords = normalizeKeywords(pkg.keywords);
+        const entry =
+          type === "plugin"
+            ? officialPlugins[stripPrefix(npm, type)]
+            : officialServices[stripPrefix(npm, type)];
+
+        seen.set(npm, {
+          name: stripPrefix(npm, type),
+          npm,
+          type,
+          description: String(pkg.description || "").trim(),
+          version: String(pkg.version || "").trim(),
+          keywords,
+          tags: extractTags(keywords),
+          official: Boolean(entry),
+          builtin: Boolean(entry?.builtin),
+          repo: toBrowserRepoUrl(
+            typeof pkg.links?.repository === "string"
+              ? pkg.links.repository
+              : "",
+          ),
+          homepage: String(pkg.links?.homepage || "").trim(),
+          npmUrl: String(
+            pkg.links?.npm || `https://www.npmjs.com/package/${npm}`,
+          ),
+          date: String(pkg.date || "").trim(),
+          searchScore: Number(obj.searchScore || obj.score?.final || 0),
+        });
+      }
+
+      const builtinTasks: Promise<void>[] = [];
+
+      const processBuiltin = async (
+        entries: Record<string, OfficialEntry>,
+        type: "plugin" | "service",
+      ) => {
+        for (const [key, entry] of Object.entries(entries)) {
+          if (!entry.builtin) continue;
+          const npm = `mioku-${type === "plugin" ? "plugin" : "service"}-${key}`;
+          if (seen.has(npm)) {
+            const existing = seen.get(npm)!;
+            existing.official = true;
+            existing.builtin = true;
+          } else {
+            const pkgJson = await fetchBuiltinPkgJson(type, key);
+            seen.set(npm, {
+              name: key,
+              npm,
+              type,
+              description: pkgJson ? String(pkgJson.description || "").trim() : "",
+              version: pkgJson ? String(pkgJson.version || "").trim() : "",
+              keywords: ["mioku"],
+              tags: [],
+              official: true,
+              builtin: true,
+              repo: `https://github.com/mioku-lab/mioku/tree/main/${
+                type === "plugin" ? "plugins" : "src/services"
+              }/${key}`,
+              homepage: "",
+              npmUrl: `https://www.npmjs.com/package/${npm}`,
+              date: "",
+              searchScore: 0,
+            });
+          }
+        }
+      };
+
+      await Promise.all([
+        processBuiltin(officialPlugins, "plugin"),
+        processBuiltin(officialServices, "service"),
+      ]);
+
+      const items = Array.from(seen.values());
+
+      items.sort((a, b) => {
+        if (a.official !== b.official) return a.official ? -1 : 1;
+        const scoreDiff = b.searchScore - a.searchScore;
+        if (scoreDiff !== 0) return scoreDiff;
+        return a.npm.localeCompare(b.npm);
       });
-      const res = await apiFetch<{ ok: true; data: StoreSearchResponse }>(
-        `/api/store/search?${params.toString()}`,
-      );
-      setListData(res.data);
+
+      setAllItems(items);
       navAnimSeedRef.current += 1;
       setNavAnimSeed(navAnimSeedRef.current);
     } catch {
-      if (!options?.silent) toast.error("加载插件市场失败");
+      toast.error("加载插件市场失败");
     } finally {
-      if (!options?.silent) setLoadingList(false);
+      setLoadingList(false);
     }
   };
 
@@ -188,32 +358,71 @@ export function PluginStorePage() {
       setDetail(res.data);
     } catch {
       toast.error("加载详情失败");
+      setMode("list");
     } finally {
       setLoadingDetail(false);
     }
   };
 
   useEffect(() => {
-    loadOfficial().then();
     loadInstalled().then();
+    loadOfficialServices().then();
   }, []);
 
   useEffect(() => {
     if (mode === "list") {
-      loadList().then();
+      loadStore().then();
     }
-  }, [activeType, searchQuery, page, mode]);
+  }, [mode]);
 
-  const isInstalled = (name: string): boolean => {
-    return installedPlugins.some((p) => p.name === name);
+  const filteredItems = useMemo(() => {
+    let list = [...allItems];
+
+    if (activeType !== "all") {
+      list = list.filter((item) => item.type === activeType);
+    }
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          item.npm.toLowerCase().includes(q) ||
+          item.description.toLowerCase().includes(q) ||
+          item.keywords.some((k) => k.toLowerCase().includes(q)),
+      );
+    }
+
+    return list;
+  }, [allItems, activeType, searchQuery]);
+
+  const pagedItems = useMemo(() => {
+    const offset = (page - 1) * PAGE_SIZE;
+    return filteredItems.slice(offset, offset + PAGE_SIZE);
+  }, [filteredItems, page]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const hasMore = page < totalPages;
+
+  const availableTags = useMemo(() => {
+    return uniqueStrings(
+      filteredItems.flatMap((item) => item.tags || []),
+    ).slice(0, 12);
+  }, [filteredItems]);
+
+  const isInstalled = (name: string, type: "plugin" | "service"): boolean => {
+    if (type === "plugin") return installedPlugins.some((p) => p.name === name);
+    return installedServices.some((s) => s.name === name);
   };
+
+  const resolveDetailPackageName = (item: StoreItem) => item.npm;
 
   const installFromStore = async (item: StoreItem | StorePackageDetail) => {
     if (!item.repo) {
       toast.warning("该包未提供仓库地址");
       return;
     }
-    if (item.type === "plugin" && isInstalled(item.name)) {
+    if (isInstalled(item.name, item.type)) {
       toast.info(`${item.name} 已安装`);
       return;
     }
@@ -227,17 +436,38 @@ export function PluginStorePage() {
           target: item.type,
         }),
       });
-      toast.success(`安装成功：${result.name}，请重启 Mioku`);
       await loadInstalled();
+
       if (
         item.type === "plugin" &&
         Array.isArray(result.missingServices) &&
         result.missingServices.length
       ) {
-        setServicePickerMissing(result.missingServices);
-        setServicePickerCustomUrl("");
-        setServicePickerOpen(true);
+        const missingServices = result.missingServices.filter(
+          (serviceName: string) => !isInstalled(serviceName, "service"),
+        );
+
+        const officialMissingServices = missingServices.filter(
+          (serviceName: string) => Boolean(officialServices[serviceName]),
+        );
+        const customMissingServices = missingServices.filter(
+          (serviceName: string) => !officialServices[serviceName],
+        );
+
+        for (const serviceName of officialMissingServices) {
+          await installServiceByName(serviceName, { silent: true });
+        }
+
+        await loadInstalled();
+
+        if (customMissingServices.length) {
+          setServicePickerMissing(customMissingServices);
+          setServicePickerCustomUrl("");
+          setServicePickerOpen(true);
+        }
       }
+
+      toast.info(`安装完成：${result.name}`);
     } catch (error) {
       if (!(error instanceof Error)) toast.error("安装失败");
     } finally {
@@ -259,17 +489,36 @@ export function PluginStorePage() {
           target: urlTarget,
         }),
       });
-      toast.success(`安装成功：${result.name}，请重启 Mioku`);
       setUrlInput("");
       await loadInstalled();
       if (
         Array.isArray(result.missingServices) &&
         result.missingServices.length
       ) {
-        setServicePickerMissing(result.missingServices);
-        setServicePickerCustomUrl("");
-        setServicePickerOpen(true);
+        const missingServices = result.missingServices.filter(
+          (serviceName: string) => !isInstalled(serviceName, "service"),
+        );
+
+        const officialMissingServices = missingServices.filter(
+          (serviceName: string) => Boolean(officialServices[serviceName]),
+        );
+        const customMissingServices = missingServices.filter(
+          (serviceName: string) => !officialServices[serviceName],
+        );
+
+        for (const serviceName of officialMissingServices) {
+          await installServiceByName(serviceName, { silent: true });
+        }
+
+        await loadInstalled();
+
+        if (customMissingServices.length) {
+          setServicePickerMissing(customMissingServices);
+          setServicePickerCustomUrl("");
+          setServicePickerOpen(true);
+        }
       }
+      toast.info(`安装完成：${result.name}`);
     } catch (error) {
       if (!(error instanceof Error)) toast.error("安装失败");
     } finally {
@@ -277,7 +526,10 @@ export function PluginStorePage() {
     }
   };
 
-  const installServiceByName = async (serviceName: string) => {
+  const installServiceByName = async (
+    serviceName: string,
+    options?: { silent?: boolean },
+  ) => {
     const npm = officialServices[serviceName];
     if (!npm) {
       toast.warning(`未找到服务 ${serviceName} 的官方包`);
@@ -299,7 +551,9 @@ export function PluginStorePage() {
           target: "service",
         }),
       });
-      toast.success(`服务 ${serviceName} 安装成功，请重启 Mioku`);
+      if (!options?.silent) {
+        toast.info(`服务安装完成：${serviceName}`);
+      }
       setServicePickerMissing((prev) => prev.filter((item) => item !== serviceName));
     } catch {
       toast.error(`安装服务 ${serviceName} 失败`);
@@ -311,31 +565,25 @@ export function PluginStorePage() {
       toast.warning("请输入服务仓库地址");
       return;
     }
+
+    const repoUrl = servicePickerCustomUrl.trim();
+    setServicePickerOpen(false);
+    setServicePickerCustomUrl("");
+
     try {
-      await apiFetch<any>("/api/manage/install", {
+      const result = await apiFetch<any>("/api/manage/install", {
         method: "POST",
         body: JSON.stringify({
-          repoUrl: servicePickerCustomUrl.trim(),
+          repoUrl,
           target: "service",
         }),
       });
-      toast.success("服务安装成功，请重启 Mioku");
-      setServicePickerOpen(false);
+      await loadInstalled();
+      toast.info(`安装完成：${result.name}`);
     } catch {
       toast.error("安装服务失败");
     }
   };
-
-  const availableTags = useMemo(() => {
-    return uniqueStrings(
-      (listData?.items || []).flatMap((item) => item.tags || []),
-    ).slice(0, 12);
-  }, [listData]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil((listData?.total || 0) / PAGE_SIZE),
-  );
 
   useEffect(() => {
     const chipClass = (active: boolean) =>
@@ -393,7 +641,7 @@ export function PluginStorePage() {
       <Button
         size="sm"
         variant="outline"
-        onClick={() => loadList().then()}
+        onClick={() => loadStore().then()}
         disabled={loadingList}
       >
         <RefreshCw
@@ -463,38 +711,43 @@ export function PluginStorePage() {
           <CardHeader>
             <CardTitle>
               {activeType === "all"
-                ? "插件与服务市场"
+                ? "插件市场"
                 : activeType === "plugin"
                   ? "插件市场"
                   : "服务市场"}
             </CardTitle>
             <CardDescription>
-              共 {listData?.total || 0} 个结果{searchQuery ? ` · 搜索：${searchQuery}` : ""}
+              共 {filteredItems.length} 个结果{searchQuery ? ` · 搜索：${searchQuery}` : ""}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {(listData?.items || []).map((item) => (
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(pagedItems || []).map((item) => (
               <div
                 key={item.npm}
-                className="group rounded-xl border bg-card/70 p-3 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+                className="group rounded-xl border bg-card/70 p-3 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg cursor-pointer"
+                onClick={() => {
+                  setSelectedPackage(resolveDetailPackageName(item));
+                  setMode("detail");
+                  loadDetail(resolveDetailPackageName(item)).then();
+                }}
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate text-sm font-semibold">{item.name}</p>
                       <Badge className="bg-secondary">{item.type === "plugin" ? "插件" : "服务"}</Badge>
-                      {item.official ? (
+                      {item.builtin ? (
+                        <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                          内置
+                        </Badge>
+                      ) : item.official ? (
                         <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
                           官方
                         </Badge>
                       ) : (
                         <Badge className="bg-sky-500/15 text-sky-700 dark:text-sky-300">
                           社区
-                        </Badge>
-                      )}
-                      {item.type === "plugin" && isInstalled(item.name) && (
-                        <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-300">
-                          已安装
                         </Badge>
                       )}
                       {item.version && <Badge>{item.version}</Badge>}
@@ -514,28 +767,19 @@ export function PluginStorePage() {
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedPackage(item.npm);
-                        setMode("detail");
-                        loadDetail(item.npm).then();
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        installFromStore(item);
                       }}
-                    >
-                      <ExternalLink className="mr-1.5 h-4 w-4" />
-                      详情
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => installFromStore(item)}
                       disabled={
                         (!item.repo && item.type === "plugin") ||
-                        (item.type === "plugin" && isInstalled(item.name)) ||
+                        isInstalled(item.name, item.type) ||
                         installingKey === item.npm
                       }
                     >
                       {installingKey === item.npm ? (
                         <LoaderCircle className="mr-1.5 h-4 w-4 animate-spin" />
-                      ) : item.type === "plugin" && isInstalled(item.name) ? (
+                      ) : isInstalled(item.name, item.type) ? (
                         "已安装"
                       ) : (
                         <>
@@ -549,8 +793,8 @@ export function PluginStorePage() {
               </div>
             ))}
 
-            {!loadingList && (listData?.items?.length || 0) === 0 && (
-              <p className="text-sm text-muted-foreground">
+            {!loadingList && pagedItems.length === 0 && (
+              <p className="col-span-2 text-sm text-muted-foreground">
                 {searchQuery ? "没有匹配的结果" : "暂无可用包"}
               </p>
             )}
@@ -561,6 +805,7 @@ export function PluginStorePage() {
                 正在加载插件市场...
               </div>
             )}
+            </div>
 
             <div className="flex items-center justify-between border-t pt-3">
               <p className="text-xs text-muted-foreground">
@@ -579,7 +824,7 @@ export function PluginStorePage() {
                   size="sm"
                   variant="outline"
                   onClick={() => setPage((prev) => prev + 1)}
-                  disabled={!listData?.hasMore || loadingList}
+                  disabled={!hasMore || loadingList}
                 >
                   下一页
                 </Button>
@@ -613,7 +858,11 @@ export function PluginStorePage() {
                     <Badge className="bg-secondary">
                       {detail.type === "plugin" ? "插件" : "服务"}
                     </Badge>
-                    {detail.official ? (
+                    {detail.builtin ? (
+                      <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                        内置
+                      </Badge>
+                    ) : detail.official ? (
                       <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
                         官方
                       </Badge>
@@ -660,13 +909,13 @@ export function PluginStorePage() {
                       onClick={() => installFromStore(detail)}
                       disabled={
                         (!detail.repo && detail.type === "plugin") ||
-                        (detail.type === "plugin" && isInstalled(detail.name)) ||
+                        isInstalled(detail.name, detail.type) ||
                         installingKey === detail.npm
                       }
                     >
                       {installingKey === detail.npm ? (
                         <LoaderCircle className="h-4 w-4 animate-spin" />
-                      ) : detail.type === "plugin" && isInstalled(detail.name) ? (
+                      ) : isInstalled(detail.name, detail.type) ? (
                         "已安装"
                       ) : (
                         "安装"
