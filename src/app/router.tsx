@@ -52,6 +52,11 @@ const AboutPage = lazy(() =>
     default: m.AboutPage,
   })),
 );
+const PluginStorePage = lazy(() =>
+  import("@/features/store/PluginStorePage").then((m) => ({
+    default: m.PluginStorePage,
+  })),
+);
 
 function Protected({ children }: { children: ReactNode }) {
   const token = getAuthToken();
@@ -161,6 +166,14 @@ export const router = createBrowserRouter([
         element: (
           <LazyWrap>
             <AboutPage />
+          </LazyWrap>
+        ),
+      },
+      {
+        path: "store",
+        element: (
+          <LazyWrap>
+            <PluginStorePage />
           </LazyWrap>
         ),
       },

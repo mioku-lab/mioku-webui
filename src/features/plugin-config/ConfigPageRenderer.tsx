@@ -747,12 +747,19 @@ export function ConfigPageRenderer({
           }}
         />
       ) : null}
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={components}
-      >
-        {stripLeadingHeading(pageData.markdown, pageData.title)}
-      </ReactMarkdown>
+      {pageData.markdown?.trim() ? (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={components}
+        >
+          {stripLeadingHeading(pageData.markdown, pageData.title)}
+        </ReactMarkdown>
+      ) : null}
+      {pageData.fields?.length > 0 && !pageData.markdown?.trim() ? (
+        <div className="space-y-4">
+          {pageData.fields.map((field) => renderField(field))}
+        </div>
+      ) : null}
     </div>
   );
 }

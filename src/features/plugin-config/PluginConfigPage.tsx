@@ -77,7 +77,7 @@ export function PluginConfigPage() {
       const res = await apiFetch<any>("/api/plugin-config/overview");
       const items = (res.data || []) as ConfigurablePlugin[];
 
-      const configurable = items.filter((item) => item.configFiles && item.configFiles.length > 0);
+      const configurable = items.filter((item) => item.hasPage || (item.configFiles && item.configFiles.length > 0));
       setPlugins(configurable);
 
       if (configurable.length === 0) {
@@ -113,8 +113,8 @@ export function PluginConfigPage() {
         ]);
 
         const filteredConfigs = filterConfigFiles(configRes.data || {});
-        
-        if (Object.keys(filteredConfigs).length === 0) {
+
+        if (!pageRes.data && Object.keys(filteredConfigs).length === 0) {
           setPlugins((prev) => {
             const next = prev.filter((item) => item.name !== selected);
             if (next.length === 0) {
