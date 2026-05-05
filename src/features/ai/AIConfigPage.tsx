@@ -83,6 +83,11 @@ type SettingsConfig = {
   groupStructuredHistoryTtlMs: number;
   nicknames: string[];
   cooldownAfterReplyMs: number;
+  aiRequestLimits: {
+    userRpm: number;
+    groupRpm: number;
+    windowMs: number;
+  };
   dynamicDelay: {
     enabled: boolean;
     interactionWindowMs: number;
@@ -205,6 +210,11 @@ const emptySettingsConfig: SettingsConfig = {
   groupStructuredHistoryTtlMs: 600000,
   nicknames: [],
   cooldownAfterReplyMs: 20000,
+  aiRequestLimits: {
+    userRpm: 3,
+    groupRpm: 6,
+    windowMs: 60000,
+  },
   dynamicDelay: {
     enabled: true,
     interactionWindowMs: 60000,
@@ -468,6 +478,10 @@ export function AIConfigPage() {
         audio: {
           ...emptySettingsConfig.audio,
           ...(settingsRes.data?.audio || {}),
+        },
+        aiRequestLimits: {
+          ...emptySettingsConfig.aiRequestLimits,
+          ...(settingsRes.data?.aiRequestLimits || {}),
         },
         dynamicDelay: {
           ...emptySettingsConfig.dynamicDelay,
@@ -956,6 +970,55 @@ export function AIConfigPage() {
                 { label: "中", value: "medium" },
                 { label: "高", value: "high" },
               ]}
+            />
+          </Field>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>AI 请求限额</CardTitle>
+          <CardDescription>
+            限制 chat 插件每分钟可实际发起的总 AI 请求次数
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <Field
+            label="单用户 RPM"
+            hint="同一个用户每分钟最多允许的 AI 请求次数"
+          >
+            <NumberInput
+              min={0}
+              value={settings.aiRequestLimits.userRpm}
+              onValueChange={(value) => {
+                if (value === null) return;
+                setSettings((prev) => ({
+                  ...prev,
+                  aiRequestLimits: {
+                    ...prev.aiRequestLimits,
+                    userRpm: value,
+                  },
+                }));
+              }}
+            />
+          </Field>
+          <Field
+            label="单群 RPM"
+            hint="同一个群每分钟最多允许的 AI 请求次数，群内所有成员共享这个额度"
+          >
+            <NumberInput
+              min={0}
+              value={settings.aiRequestLimits.groupRpm}
+              onValueChange={(value) => {
+                if (value === null) return;
+                setSettings((prev) => ({
+                  ...prev,
+                  aiRequestLimits: {
+                    ...prev.aiRequestLimits,
+                    groupRpm: value,
+                  },
+                }));
+              }}
             />
           </Field>
         </CardContent>
