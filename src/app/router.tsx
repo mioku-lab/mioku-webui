@@ -47,6 +47,11 @@ const AIConfigPage = lazy(() =>
     default: m.AIConfigPage,
   })),
 );
+const AIUsagePage = lazy(() =>
+  import("@/features/ai-usage/AIUsagePage").then((m) => ({
+    default: m.AIUsagePage,
+  })),
+);
 const AboutPage = lazy(() =>
   import("@/features/about/AboutPage").then((m) => ({
     default: m.AboutPage,
@@ -142,6 +147,14 @@ export const router = createBrowserRouter([
         element: (
           <LazyWrap>
             <AIConfigPage />
+          </LazyWrap>
+        ),
+      },
+      {
+        path: "ai-usage",
+        element: (
+          <LazyWrap>
+            <AIUsagePage />
           </LazyWrap>
         ),
       },

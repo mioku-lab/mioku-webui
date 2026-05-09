@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -13,6 +19,7 @@ const navItems = [
   { to: "/", label: "状态总览" },
   { to: "/config", label: "Mioku设置" },
   { to: "/ai", label: "AI设置" },
+  { to: "/ai-usage", label: "使用统计" },
   { to: "/store", label: "插件市场" },
   { to: "/plugins", label: "插件管理" },
   { to: "/services", label: "服务管理" },
@@ -128,7 +135,10 @@ export function AppShell() {
           if (elapsed >= islandHideDelay) {
             if (islandHideStartYRef.current === null) {
               islandHideStartYRef.current = currentY;
-            } else if (currentY - islandHideStartYRef.current > islandHideDistance) {
+            } else if (
+              currentY - islandHideStartYRef.current >
+              islandHideDistance
+            ) {
               islandHideStartYRef.current = null;
               setTopbarMode("hidden");
             }
@@ -298,7 +308,10 @@ export function AppShell() {
             </div>
           </aside>
 
-          <main ref={maxWidthRef} className="space-y-3 px-3 md:space-y-5 md:px-0">
+          <main
+            ref={maxWidthRef}
+            className="space-y-3 px-3 md:space-y-5 md:px-0"
+          >
             <div className="sticky top-3 z-20 flex justify-center md:px-0">
               <header
                 className={`relative flex items-center justify-between gap-3 border bg-card panel-glow animate-soft-pop transition-all duration-500 ease-[cubic-bezier(0.2,0.9,0.3,1.1)] motion-reduce:transition-none ${
@@ -315,9 +328,11 @@ export function AppShell() {
                         : "topbar-island-fade -translate-y-[140%] rounded-2xl px-4 py-2.5 opacity-0 pointer-events-none"
                 }`}
                 style={{
-                  width: topbarMode === "initial" ? "100%" : `${compactWidth}px`,
+                  width:
+                    topbarMode === "initial" ? "100%" : `${compactWidth}px`,
                   minWidth: "320px",
-                  maxWidth: topbarMode === "initial" ? "100%" : `${compactWidth}px`,
+                  maxWidth:
+                    topbarMode === "initial" ? "100%" : `${compactWidth}px`,
                 }}
               >
                 <div
@@ -335,14 +350,14 @@ export function AppShell() {
                   </Button>
                   <div
                     className={`topbar-chip-scroll flex min-w-0 flex-1 items-center gap-2 overflow-x-auto touch-pan-x ${
-                      topbarMode === "initial" ? "" : "topbar-island-content-fade"
+                      topbarMode === "initial"
+                        ? ""
+                        : "topbar-island-content-fade"
                     }`}
                     onWheel={handleTopbarHorizontalWheel}
                   >
                     {centerContent ? (
-                      <div className="shrink-0 md:hidden">
-                        {centerContent}
-                      </div>
+                      <div className="shrink-0 md:hidden">{centerContent}</div>
                     ) : null}
                     <div key={location.pathname} className="animate-soft-pop">
                       {leftContent}
@@ -357,10 +372,15 @@ export function AppShell() {
                         : "left-4 translate-x-0 opacity-100"
                     }`}
                   >
-                    <div className="max-w-full overflow-hidden">{centerContent}</div>
+                    <div className="max-w-full overflow-hidden">
+                      {centerContent}
+                    </div>
                   </div>
                 ) : null}
-                <div ref={rightSlotRef} className="flex shrink-0 items-center gap-2">
+                <div
+                  ref={rightSlotRef}
+                  className="flex shrink-0 items-center gap-2"
+                >
                   {rightContent}
                   <ThemeToggle />
                 </div>
