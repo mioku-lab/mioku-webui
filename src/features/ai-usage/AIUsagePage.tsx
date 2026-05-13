@@ -169,13 +169,6 @@ const chartLineAnimation = {
   animationEasing: "ease-out" as const,
 };
 
-type TooltipPayload = {
-  name?: string;
-  value?: string | number;
-  color?: string;
-  dataKey?: string | number;
-  payload?: Record<string, string | number>;
-};
 
 const rangeLabels: Record<UsageRange, string> = {
   today: "今天",
@@ -996,57 +989,19 @@ function activityData(summary: UsageSummary | null) {
 function ChartTooltip() {
   return (
     <Tooltip
-      content={<ChartTooltipContent />}
-      cursor={false}
-      isAnimationActive={false}
-      offset={16}
-      wrapperStyle={{ pointerEvents: "none", zIndex: 20 }}
+      cursor={{ fill: "hsl(var(--border) / 0.3)" }}
+      contentStyle={{
+        borderRadius: 16,
+        border: "1px solid hsl(var(--border))",
+        background: "hsl(var(--card) / 0.95)",
+        backdropFilter: "blur(12px)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+        padding: "8px 12px",
+        fontSize: 12,
+      }}
+      offset={8}
     />
   );
-}
-
-function ChartTooltipContent({
-  active,
-  label,
-  payload,
-}: {
-  active?: boolean;
-  label?: string | number;
-  payload?: TooltipPayload[];
-}) {
-  if (!active || !payload || payload.length === 0) return null;
-  return (
-    <div className="rounded-2xl border bg-card/95 px-3 py-2 text-xs text-foreground shadow-xl backdrop-blur-md">
-      <div className="mb-1 font-medium">{label}</div>
-      <div className="space-y-1">
-        {payload.map((item) => (
-          <div
-            key={`${String(item.dataKey)}-${String(item.name)}`}
-            className="flex min-w-[150px] items-center justify-between gap-4"
-          >
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ background: item.color || "hsl(var(--primary))" }}
-              />
-              {item.name}
-            </span>
-            <span className="font-medium">{formatTooltipValue(item)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function formatTooltipValue(item: TooltipPayload): string {
-  const value =
-    typeof item.value === "number" ? item.value : Number(item.value);
-  if (!Number.isFinite(value)) return String(item.value ?? "");
-  if (String(item.name || "").includes("率")) {
-    return `${value.toFixed(1)}%`;
-  }
-  return formatNumber(value);
 }
 
 function shortChartLabel(value: string | number): string {
