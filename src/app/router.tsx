@@ -37,6 +37,11 @@ const DatabasePage = lazy(() =>
     default: m.DatabasePage,
   })),
 );
+const DataManagementPage = lazy(() =>
+  import("@/features/data-management/DataManagementPage").then((m) => ({
+    default: m.DataManagementPage,
+  })),
+);
 const WebUIManagePage = lazy(() =>
   import("@/features/webui/WebUIManagePage").then((m) => ({
     default: m.WebUIManagePage,
@@ -163,6 +168,14 @@ export const router = createBrowserRouter([
         element: (
           <LazyWrap>
             <DatabasePage />
+          </LazyWrap>
+        ),
+      },
+      {
+        path: "data-management",
+        element: (
+          <LazyWrap>
+            <DataManagementPage />
           </LazyWrap>
         ),
       },
