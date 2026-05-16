@@ -61,11 +61,14 @@ export function WebUIManagePage() {
   });
   const [hasSettingsChanges, setHasSettingsChanges] = useState(false);
   const initialSettingsRef = useRef("");
+  const settingsRef = useRef(settings);
   const updateNowRef = useRef<() => void>(() => {});
 
   useUnsavedChanges(hasSettingsChanges, {
     message: "WebUI 设置还没有保存，确定要离开吗？",
   });
+
+  settingsRef.current = settings;
 
   useEffect(() => {
     const current = JSON.stringify(settings);
@@ -90,19 +93,20 @@ export function WebUIManagePage() {
   }, []);
 
   const saveSettings = useCallback(async () => {
+    const currentSettings = settingsRef.current;
     setSavingSettings(true);
     try {
       await apiFetch("/api/settings", {
         method: "PUT",
-        body: JSON.stringify(settings),
+        body: JSON.stringify(currentSettings),
       });
-      initialSettingsRef.current = JSON.stringify(settings);
+      initialSettingsRef.current = JSON.stringify(currentSettings);
       setHasSettingsChanges(false);
       toast.success("WebUI 设置已保存");
     } finally {
       setSavingSettings(false);
     }
-  }, [settings]);
+  }, []);
 
   useEffect(() => {
     setDenseHeader(true);

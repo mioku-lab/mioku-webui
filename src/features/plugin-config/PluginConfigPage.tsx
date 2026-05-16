@@ -68,9 +68,14 @@ export function PluginConfigPage() {
   const { setLeftContent, setRightContent } = useTopbar();
 
   const initialConfigsRef = useRef<string>("");
+  const selectedRef = useRef("");
+  const configsRef = useRef<Record<string, JSONValue>>({});
   const [hasChanges, setHasChanges] = useState(false);
 
   useUnsavedChanges(hasChanges);
+
+  selectedRef.current = selected;
+  configsRef.current = configs;
 
   const loadConfigurablePlugins = async (preferredSelected?: string) => {
     try {
@@ -199,21 +204,23 @@ export function PluginConfigPage() {
   }, []);
 
   const saveAll = async () => {
-    if (!selected) return;
+    const currentSelected = selectedRef.current;
+    const currentConfigs = configsRef.current;
+    if (!currentSelected) return;
     setSaving(true);
 
     try {
-      for (const [fileName, value] of Object.entries(configs)) {
-        await apiFetch(`/api/plugin-config/${encodeURIComponent(selected)}/${fileName}`, {
+      for (const [fileName, value] of Object.entries(currentConfigs)) {
+        await apiFetch(`/api/plugin-config/${encodeURIComponent(currentSelected)}/${fileName}`, {
           method: "PUT",
           body: JSON.stringify(value),
         });
       }
 
       toast.success("配置已保存");
-      initialConfigsRef.current = JSON.stringify(configs);
+      initialConfigsRef.current = JSON.stringify(currentConfigs);
       setHasChanges(false);
-      await loadConfigurablePlugins(selected);
+      await loadConfigurablePlugins(currentSelected);
     } catch (error) {
       toast.error("保存失败");
     } finally {
@@ -234,7 +241,7 @@ export function PluginConfigPage() {
       </Button>,
     );
     return () => setRightContent(null);
-  }, [saving, hasChanges, setRightContent]);
+  }, [saving, hasChanges, setRightContent, selected]);
 
   const updateConfigText = (fileName: string, raw: string) => {
     try {

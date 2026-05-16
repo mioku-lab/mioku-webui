@@ -165,9 +165,12 @@ export function MiokuConfigPage() {
   const { setLeftContent, setRightContent } = useTopbar();
 
   const initialConfigRef = useRef<string>("");
+  const miokuConfigRef = useRef<MiokuConfig>(miokuConfig);
   const [hasChanges, setHasChanges] = useState(false);
 
   useUnsavedChanges(hasChanges);
+
+  miokuConfigRef.current = miokuConfig;
 
   const load = async () => {
     setLoading(true);
@@ -243,6 +246,24 @@ export function MiokuConfigPage() {
     return () => setLeftContent(null);
   }, [activeTab, setLeftContent]);
 
+  const saveAll = async () => {
+    const currentConfig = miokuConfigRef.current;
+    setSaving(true);
+    try {
+      await apiFetch("/api/config/mioku", {
+        method: "PUT",
+        body: JSON.stringify(currentConfig),
+      });
+      toast.success("配置保存成功");
+      initialConfigRef.current = JSON.stringify(currentConfig);
+      setHasChanges(false);
+    } catch {
+      toast.error("保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     setRightContent(
       <Button onClick={saveAll} disabled={saving || !hasChanges} size="sm">
@@ -251,24 +272,7 @@ export function MiokuConfigPage() {
       </Button>,
     );
     return () => setRightContent(null);
-  }, [saving, hasChanges, setRightContent]);
-
-  const saveAll = async () => {
-    setSaving(true);
-    try {
-      await apiFetch("/api/config/mioku", {
-        method: "PUT",
-        body: JSON.stringify(miokuConfig),
-      });
-      toast.success("配置保存成功");
-      initialConfigRef.current = JSON.stringify(miokuConfig);
-      setHasChanges(false);
-    } catch {
-      toast.error("保存失败");
-    } finally {
-      setSaving(false);
-    }
-  };
+  }, [saving, hasChanges, setRightContent, miokuConfig]);
 
   const updateBootConfig = (
     updater: (boot: BootSystemConfig) => BootSystemConfig,
