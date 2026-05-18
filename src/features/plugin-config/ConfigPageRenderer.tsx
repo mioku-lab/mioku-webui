@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ChevronDown, Eye, EyeOff, Search, X } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Plus, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import {
@@ -32,6 +32,8 @@ interface ConfigField {
   options?: DatasourceOption[];
   defaultValue?: any;
   currentValue?: any;
+  /** For array type: the item schema fields */
+  itemFields?: ConfigField[];
 }
 
 interface ConfigPageData {
@@ -227,6 +229,106 @@ export function ConfigPageRenderer({
     return value !== undefined ? value : field.defaultValue;
   }, []);
 
+  // Renders a sub-field within an array item
+  const renderSubField = useCallback((
+    subField: ConfigField,
+    item: Record<string, any>,
+    fieldKey: string,
+    fieldValue: any,
+    onChange: (updated: any) => void,
+  ) => {
+    const value = fieldValue;
+
+    switch (subField.type) {
+      case "text":
+      case "secret":
+        return subField.type === "secret" ? (
+          <SecretInputField
+            field={subField}
+            value={value || ""}
+            onChange={(next) => onChange(next)}
+          />
+        ) : (
+          <Input
+            id={`sub-${subField.key}`}
+            type="text"
+            value={value || ""}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={subField.placeholder}
+          />
+        );
+      case "textarea":
+        return (
+          <Textarea
+            id={`sub-${subField.key}`}
+            value={normalizeEscapedNewlines(value)}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={subField.placeholder}
+            className="min-h-24 whitespace-pre-wrap"
+          />
+        );
+      case "number":
+        return (
+          <NumberInput
+            id={`sub-${subField.key}`}
+            value={typeof value === "number" ? value : null}
+            emptyBehavior="null"
+            onValueChange={(next) => onChange(next)}
+            placeholder={subField.placeholder}
+          />
+        );
+      case "switch":
+        return (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={!!value}
+            className={getCheckboxCardClass(!!value)}
+            onClick={() => onChange(!value)}
+          >
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm font-medium">{subField.label}</span>
+              <input
+                type="checkbox"
+                className="form-checkbox"
+                checked={!!value}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onChange(e.target.checked);
+                }}
+              />
+            </div>
+          </button>
+        );
+      case "select":
+        return (
+          <Select
+            value={String(value ?? "")}
+            onValueChange={(next) => onChange(next)}
+          >
+            <SelectTrigger id={`sub-${subField.key}`}>
+              <SelectValue placeholder={subField.placeholder || "请选择"} />
+            </SelectTrigger>
+            <SelectContent>
+              {subField.options?.map((opt: any) => (
+                <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      default:
+        return (
+          <Input
+            id={`sub-${subField.key}`}
+            type="text"
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={subField.placeholder}
+          />
+        );
+    }
+  }, []);
+
   const renderField = useCallback((field: ConfigField) => {
     const value = getFieldValue(field);
     const dynamicSourceOptions =
@@ -236,28 +338,32 @@ export function ConfigPageRenderer({
       case "text":
       case "secret":
         return (
-          <div key={field.key} className={fieldCardClass}>
-            <Label htmlFor={field.key} className="text-sm font-medium">
-              {field.label}
-              {field.required && <span className="text-destructive ml-1">*</span>}
-            </Label>
-            {field.type === "secret" ? (
-              <SecretInputField
-                field={field}
-                value={value || ""}
-                onChange={(nextValue) => handleFieldChange(field, nextValue)}
-              />
-            ) : (
-              <Input
-                id={field.key}
-                type="text"
-                value={value || ""}
-                onChange={(e) => handleFieldChange(field, e.target.value)}
-                placeholder={field.placeholder}
-              />
-            )}
+          <div key={field.key} className="space-y-1.5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+              <Label htmlFor={field.key} className="text-sm font-medium sm:basis-28 sm:shrink-0">
+                {field.label}
+                {field.required && <span className="text-destructive ml-1">*</span>}
+              </Label>
+              <div className="flex-1">
+                {field.type === "secret" ? (
+                  <SecretInputField
+                    field={field}
+                    value={value || ""}
+                    onChange={(nextValue) => handleFieldChange(field, nextValue)}
+                  />
+                ) : (
+                  <Input
+                    id={field.key}
+                    type="text"
+                    value={value || ""}
+                    onChange={(e) => handleFieldChange(field, e.target.value)}
+                    placeholder={field.placeholder}
+                  />
+                )}
+              </div>
+            </div>
             {field.description && (
-              <p className="text-sm leading-6 text-muted-foreground">{field.description}</p>
+              <p className="text-sm text-muted-foreground">{field.description}</p>
             )}
           </div>
         );
@@ -286,20 +392,24 @@ export function ConfigPageRenderer({
 
       case "number":
         return (
-          <div key={field.key} className={fieldCardClass}>
-            <Label htmlFor={field.key} className="text-sm font-medium">
-              {field.label}
-              {field.required && <span className="text-destructive ml-1">*</span>}
-            </Label>
-            <NumberInput
-              id={field.key}
-              value={typeof value === "number" ? value : null}
-              emptyBehavior="null"
-              onValueChange={(nextValue) => handleFieldChange(field, nextValue)}
-              placeholder={field.placeholder}
-            />
+          <div key={field.key} className="space-y-1.5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+              <Label htmlFor={field.key} className="text-sm font-medium sm:basis-28 sm:shrink-0">
+                {field.label}
+                {field.required && <span className="text-destructive ml-1">*</span>}
+              </Label>
+              <div className="flex-1">
+                <NumberInput
+                  id={field.key}
+                  value={typeof value === "number" ? value : null}
+                  emptyBehavior="null"
+                  onValueChange={(nextValue) => handleFieldChange(field, nextValue)}
+                  placeholder={field.placeholder}
+                />
+              </div>
+            </div>
             {field.description && (
-              <p className="text-sm leading-6 text-muted-foreground">{field.description}</p>
+              <p className="text-sm text-muted-foreground">{field.description}</p>
             )}
           </div>
         );
@@ -353,28 +463,30 @@ export function ConfigPageRenderer({
             ) || null;
 
           return (
-            <div key={field.key} className={`${fieldCardClass} max-w-md`}>
-              <div className="space-y-1">
-                <Label htmlFor={field.key} className="block text-sm font-medium">
+            <div key={field.key} className="space-y-1.5 max-w-md">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                <Label htmlFor={field.key} className="text-sm font-medium sm:basis-28 sm:shrink-0">
                   {field.label}
                   {field.required && <span className="text-destructive ml-1">*</span>}
                 </Label>
+                <div className="flex-1">
+                  <button
+                    id={field.key}
+                    type="button"
+                    className="flex min-h-10 w-full items-center justify-between rounded-md border border-input bg-card px-3 py-2 text-left text-sm transition hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    onClick={() => setActivePickerField(field)}
+                  >
+                    <span className={cn("truncate", !selectedOption && "text-muted-foreground")}>
+                      {selectedOption
+                        ? `${selectedOption.label} (${selectedOption.meta?.qq || selectedOption.meta?.groupId || selectedOption.value})`
+                        : field.placeholder || "点击选择"}
+                    </span>
+                    <Search className="ml-3 h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                </div>
               </div>
-              <button
-                id={field.key}
-                type="button"
-                className="flex min-h-10 w-full items-center justify-between rounded-md border border-input bg-card px-3 py-2 text-left text-sm transition hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                onClick={() => setActivePickerField(field)}
-              >
-                <span className={cn("truncate", !selectedOption && "text-muted-foreground")}>
-                  {selectedOption
-                    ? `${selectedOption.label} (${selectedOption.meta?.qq || selectedOption.meta?.groupId || selectedOption.value})`
-                    : field.placeholder || "点击选择"}
-                </span>
-                <Search className="ml-3 h-4 w-4 shrink-0 text-muted-foreground" />
-              </button>
               {selectedOption ? (
-                <div className="flex items-center gap-3 rounded-xl border bg-card/70 p-3">
+                <div className="flex items-center gap-3 rounded-xl border bg-card/70 p-3 ">
                   <div className="h-10 w-10 overflow-hidden rounded-full bg-secondary/40">
                     {selectedOption.meta?.avatarUrl ? (
                       <img
@@ -402,7 +514,7 @@ export function ConfigPageRenderer({
                 </div>
               ) : null}
               {field.description && (
-                <p className="text-sm leading-6 text-muted-foreground">{field.description}</p>
+                <p className="text-sm text-muted-foreground ">{field.description}</p>
               )}
             </div>
           );
@@ -412,40 +524,42 @@ export function ConfigPageRenderer({
         const selectValue = value == null ? "" : String(value);
 
         return (
-          <div key={field.key} className={`${fieldCardClass} max-w-md`}>
-            <div className="space-y-1">
-              <Label htmlFor={field.key} className="block text-sm font-medium">
+          <div key={field.key} className="space-y-1.5 max-w-md">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+              <Label htmlFor={field.key} className="text-sm font-medium sm:basis-28 sm:shrink-0">
                 {field.label}
                 {field.required && <span className="text-destructive ml-1">*</span>}
               </Label>
+              <div className="flex-1">
+                <Select
+                  value={selectValue || emptySelectValue}
+                  onValueChange={(nextValue) =>
+                    handleFieldChange(
+                      field,
+                      nextValue === emptySelectValue ? "" : nextValue,
+                    )
+                  }
+                >
+                  <SelectTrigger id={field.key} className="w-full">
+                    <SelectValue placeholder={field.placeholder || "请选择"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!field.required ? (
+                      <SelectItem value={emptySelectValue}>
+                        {field.placeholder || "请选择"}
+                      </SelectItem>
+                    ) : null}
+                    {options.map((opt: any) => (
+                      <SelectItem key={opt.value} value={String(opt.value)}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <Select
-              value={selectValue || emptySelectValue}
-              onValueChange={(nextValue) =>
-                handleFieldChange(
-                  field,
-                  nextValue === emptySelectValue ? "" : nextValue,
-                )
-              }
-            >
-              <SelectTrigger id={field.key} className="w-full">
-                <SelectValue placeholder={field.placeholder || "请选择"} />
-              </SelectTrigger>
-              <SelectContent>
-                {!field.required ? (
-                  <SelectItem value={emptySelectValue}>
-                    {field.placeholder || "请选择"}
-                  </SelectItem>
-                ) : null}
-                {options.map((opt: any) => (
-                  <SelectItem key={opt.value} value={String(opt.value)}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             {field.description && (
-              <p className="text-sm leading-6 text-muted-foreground">{field.description}</p>
+              <p className="text-sm text-muted-foreground">{field.description}</p>
             )}
           </div>
         );
@@ -592,10 +706,84 @@ export function ConfigPageRenderer({
           </div>
         );
 
+      case "array": {
+        const items = Array.isArray(value) ? value : [];
+        return (
+          <div key={field.key} className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">
+                {field.label}
+                {field.required && <span className="text-destructive ml-1">*</span>}
+              </Label>
+              <button
+                type="button"
+                onClick={() => {
+                  const newItems = [...items, {}];
+                  handleFieldChange(field, newItems);
+                }}
+                className="flex items-center gap-1 rounded-md border border-input bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                添加
+              </button>
+            </div>
+            {items.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">暂无数据，点击上方添加</p>
+            ) : (
+              <div className="space-y-3">
+                {items.map((item: any, index: number) => (
+                  <div key={index} className="rounded-xl border bg-card/78 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">#{index + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newItems = items.filter((_: any, i: number) => i !== index);
+                          handleFieldChange(field, newItems);
+                        }}
+                        className="rounded-full p-1 text-muted-foreground transition hover:bg-secondary hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {field.itemFields?.map((subField) => {
+                      const fieldKey = subField.key.split(".").pop()!;
+                      const fieldValue = item?.[fieldKey];
+                      return (
+                        <div key={subField.key} className="space-y-1.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                            <Label htmlFor={`${field.key}.${index}.${subField.key}`} className="text-xs font-medium sm:basis-28 sm:shrink-0">
+                              {subField.label}
+                            </Label>
+                            <div className="flex-1">
+                              {renderSubField(subField, item, fieldKey, fieldValue, (updated: any) => {
+                                const newItems = [...items];
+                                newItems[index] = { ...newItems[index], [fieldKey]: updated };
+                                handleFieldChange(field, newItems);
+                              })}
+                            </div>
+                          </div>
+                          {subField.description && (
+                            <p className="text-xs text-muted-foreground ">{subField.description}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+            {field.description && (
+              <p className="text-sm leading-6 text-muted-foreground">{field.description}</p>
+            )}
+          </div>
+        );
+      }
+
       default:
         return null;
     }
-  }, [datasources, getFieldValue, handleFieldChange]);
+  }, [datasources, getFieldValue, handleFieldChange, renderSubField]);
 
   // Keep markdown renderers stable so inputs are not remounted on each keystroke.
   const components = useMemo(() => ({
