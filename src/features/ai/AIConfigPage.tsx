@@ -123,11 +123,6 @@ type PersonalizationConfig = {
     idleMessageCount: number;
     idleCheckBotIds: string[];
   };
-  typo: {
-    enabled: boolean;
-    errorRate: number;
-    wordReplaceRate: number;
-  };
   emoji: {
     enabled: boolean;
     characters: string[];
@@ -249,11 +244,6 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
     idleThresholdMs: 1800000,
     idleMessageCount: 100,
     idleCheckBotIds: [],
-  },
-  typo: {
-    enabled: true,
-    errorRate: 0.03,
-    wordReplaceRate: 0.1,
   },
   emoji: {
     enabled: false,
@@ -442,10 +432,6 @@ export function AIConfigPage() {
         planner: {
           ...emptyPersonalizationConfig.planner,
           ...(personalizationRes.data?.planner || {}),
-        },
-        typo: {
-          ...emptyPersonalizationConfig.typo,
-          ...(personalizationRes.data?.typo || {}),
         },
         emoji: {
           ...emptyPersonalizationConfig.emoji,
@@ -1559,40 +1545,6 @@ export function AIConfigPage() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <CapabilityCard
-            title="Typo"
-            description="制造轻微错字和替换，减少 AI 味"
-            enabled={personalization.typo.enabled}
-            onEnabledChange={(checked) =>
-              setPersonalization((prev) => ({
-                ...prev,
-                typo: { ...prev.typo, enabled: checked },
-              }))
-            }
-          >
-            <NumberField
-              label="错字率"
-              step="0.01"
-              value={personalization.typo.errorRate}
-              onChange={(value) =>
-                setPersonalization((prev) => ({
-                  ...prev,
-                  typo: { ...prev.typo, errorRate: value },
-                }))
-              }
-            />
-            <NumberField
-              label="替换率"
-              step="0.01"
-              value={personalization.typo.wordReplaceRate}
-              onChange={(value) =>
-                setPersonalization((prev) => ({
-                  ...prev,
-                  typo: { ...prev.typo, wordReplaceRate: value },
-                }))
-              }
-            />
-          </CapabilityCard>
-          <CapabilityCard
             title="Emoji"
             description="选择表情图或 emoji 强化情绪输出"
             enabled={personalization.emoji.enabled}
@@ -2121,7 +2073,6 @@ function countEnabledCapabilities(
     personalization.memory.enabled,
     personalization.topic.enabled,
     personalization.planner.enabled,
-    personalization.typo.enabled,
     personalization.emoji.enabled,
     personalization.expression.enabled,
     settings.searxng.enabled,
