@@ -17,13 +17,6 @@ import { setToken } from "@/features/auth/authSlice";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 
 interface WebUIUpdateInfo {
@@ -42,7 +35,6 @@ interface WebUIUpdateInfo {
 interface WebUISettings {
   port: number;
   host: string;
-  packageManager: string;
 }
 
 export function WebUIManagePage() {
@@ -57,7 +49,6 @@ export function WebUIManagePage() {
   const [settings, setSettings] = useState<WebUISettings>({
     port: 3339,
     host: "0.0.0.0",
-    packageManager: "bun",
   });
   const [hasSettingsChanges, setHasSettingsChanges] = useState(false);
   const initialSettingsRef = useRef("");
@@ -85,7 +76,6 @@ export function WebUIManagePage() {
     const nextSettings = res.data || {
       port: 3339,
       host: "0.0.0.0",
-      packageManager: "bun",
     };
     setSettings(nextSettings);
     initialSettingsRef.current = JSON.stringify(nextSettings);
@@ -244,7 +234,7 @@ export function WebUIManagePage() {
         <CardHeader>
           <CardTitle>WebUI 设置</CardTitle>
           <CardDescription>
-            管理 WebUI 自身的端口、主机和包管理器。
+            管理 WebUI 自身的端口和主机。
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
@@ -272,27 +262,6 @@ export function WebUIManagePage() {
                 }))
               }
             />
-          </div>
-          <div className="space-y-1 md:col-span-2">
-            <label className="text-xs text-muted-foreground">包管理器</label>
-            <Select
-              value={settings.packageManager}
-              onValueChange={(value) =>
-                setSettings((prev) => ({
-                  ...prev,
-                  packageManager: value,
-                }))
-              }
-            >
-              <SelectTrigger className="w-full" id="package-manager">
-                <SelectValue placeholder="选择包管理器" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bun">bun</SelectItem>
-                <SelectItem value="npm">npm</SelectItem>
-                <SelectItem value="pnpm">pnpm</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>

@@ -24,7 +24,6 @@ const navItems = [
   { to: "/plugins", label: "插件管理" },
   { to: "/services", label: "服务管理" },
   { to: "/plugin-config", label: "插件配置" },
-  { to: "/database", label: "数据库" },
   { to: "/data-management", label: "数据管理" },
   { to: "/webui", label: "WebUI管理" },
   { to: "/about", label: "关于" },

@@ -32,11 +32,6 @@ const PluginConfigPage = lazy(() =>
     default: m.PluginConfigPage,
   })),
 );
-const DatabasePage = lazy(() =>
-  import("@/features/database/DatabasePage").then((m) => ({
-    default: m.DatabasePage,
-  })),
-);
 const DataManagementPage = lazy(() =>
   import("@/features/data-management/DataManagementPage").then((m) => ({
     default: m.DataManagementPage,
@@ -160,14 +155,6 @@ export const router = createBrowserRouter([
         element: (
           <LazyWrap>
             <AIUsagePage />
-          </LazyWrap>
-        ),
-      },
-      {
-        path: "database",
-        element: (
-          <LazyWrap>
-            <DatabasePage />
           </LazyWrap>
         ),
       },

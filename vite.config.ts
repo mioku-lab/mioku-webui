@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, "../src/services/webui/dist"),
+    outDir: path.resolve(__dirname, "../packages/mioku-service-webui/dist"),
     emptyOutDir: true,
   },
   server: {
