@@ -2,26 +2,27 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 import fs from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 const DIST_DIR = path.resolve(__dirname, "../packages/mioku-service-webui/dist");
-const VERSION_FILE = path.join(DIST_DIR, ".webui-version");
 
 function writeWebUIVersion() {
   const pkgPath = path.join(__dirname, "package.json");
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
   const version = pkg.version || "unknown";
-  fs.writeFileSync(VERSION_FILE, `${version}\n`, "utf-8");
-  console.log(`[webui] wrote version ${version} to ${VERSION_FILE}`);
+  const versionFile = path.join(DIST_DIR, ".webui-version");
+  mkdirSync(dirname(versionFile), { recursive: true });
+  writeFileSync(versionFile, `${version}\n`, "utf-8");
+  console.log(`[webui] wrote version ${version} to ${versionFile}`);
 }
-
-writeWebUIVersion();
 
 export default defineConfig({
   plugins: [
     react(),
     {
       name: "write-webui-version",
-      closeBundle() {
+      buildStart() {
         writeWebUIVersion();
       },
     },

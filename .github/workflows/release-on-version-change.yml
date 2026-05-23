@@ -113,13 +113,13 @@ jobs:
         run: |
           set -euo pipefail
           DIST_DIR=""
-          if [ -d "dist" ]; then
+          if [ -d "../packages/mioku-service-webui/dist" ]; then
+            DIST_DIR="../packages/mioku-service-webui/dist"
+          elif [ -d "dist" ]; then
             DIST_DIR="dist"
-          elif [ -d "../src/services/webui/dist" ]; then
-            DIST_DIR="../src/services/webui/dist"
           else
             echo "Cannot find build output directory." >&2
-            echo "Checked: ./dist and ../src/services/webui/dist" >&2
+            echo "Checked: ../packages/mioku-service-webui/dist and ./dist" >&2
             exit 1
           fi
 
