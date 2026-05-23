@@ -418,10 +418,6 @@ export function PluginStorePage() {
   const resolveDetailPackageName = (item: StoreItem) => item.npm;
 
   const installFromStore = async (item: StoreItem | StorePackageDetail) => {
-    if (!item.repo) {
-      toast.warning("该包未提供仓库地址");
-      return;
-    }
     if (isInstalled(item.name, item.type)) {
       toast.info(`${item.name} 已安装`);
       return;
@@ -432,7 +428,7 @@ export function PluginStorePage() {
       const result = await apiFetch<any>("/api/manage/install", {
         method: "POST",
         body: JSON.stringify({
-          repoUrl: item.repo,
+          repoUrl: item.npm,
           target: item.type,
         }),
       });
@@ -537,17 +533,10 @@ export function PluginStorePage() {
     }
 
     try {
-      const res = await apiFetch<{ ok: true; data: StorePackageDetail }>(
-        `/api/store/package/${encodeURIComponent(npm)}`,
-      );
-      if (!res.data.repo) {
-        toast.warning(`服务 ${serviceName} 未提供仓库地址`);
-        return;
-      }
       await apiFetch<any>("/api/manage/install", {
         method: "POST",
         body: JSON.stringify({
-          repoUrl: res.data.repo,
+          repoUrl: npm,
           target: "service",
         }),
       });
