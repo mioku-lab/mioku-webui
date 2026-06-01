@@ -48,6 +48,7 @@ type SettingsConfig = {
     timeoutMs: number;
     defaultLimit: number;
     maxLimit: number;
+    maxSearchCount: number;
   };
   webReader: {
     enabled: boolean;
@@ -170,6 +171,7 @@ const emptySettingsConfig: SettingsConfig = {
     timeoutMs: 8000,
     defaultLimit: 5,
     maxLimit: 8,
+    maxSearchCount: 2,
   },
   webReader: {
     enabled: true,
@@ -1682,6 +1684,16 @@ export function AIConfigPage() {
                 setSettings((prev) => ({
                   ...prev,
                   searxng: { ...prev.searxng, maxLimit: value },
+                }))
+              }
+            />
+            <NumberField
+              label="最大搜索次数"
+              value={settings.searxng.maxSearchCount}
+              onChange={(value) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  searxng: { ...prev.searxng, maxSearchCount: value },
                 }))
               }
             />
