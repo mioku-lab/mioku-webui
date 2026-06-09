@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Search, Users, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ export interface DatasourceOption {
     groupName?: string;
     memberCount?: number;
     searchText?: string;
+    isCustom?: boolean;
     [key: string]: unknown;
   };
 }
@@ -34,7 +35,9 @@ interface DatasourcePickerDialogProps {
 }
 
 function normalizeText(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function matchesQuery(option: DatasourceOption, query: string): boolean {
@@ -107,6 +110,202 @@ function getAvatarFallback(source?: string) {
   return source === "qq_groups" ? Users : UserRound;
 }
 
+const NICKNAME_FETCH_DEBOUNCE_MS = 350;
+
+function useDebouncedNickname(
+  userId: string | null,
+  source: string | undefined,
+  enabled: boolean,
+): { nickname: string | null; loading: boolean } {
+  const [nickname, setNickname] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const lastRequestedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !userId) {
+      setNickname(null);
+      setLoading(false);
+      return;
+    }
+
+    setNickname(null);
+    setLoading(true);
+    lastRequestedRef.current = userId;
+
+    const timer = setTimeout(async () => {
+      if (source !== "qq_friends") {
+        // 仅对好友号码异步拉昵称，群号不拉。
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch("/api/stranger/info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId }),
+        });
+        if (lastRequestedRef.current !== userId) return;
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          const nick = data?.data?.nickname;
+          if (typeof nick === "string" && nick.trim()) {
+            setNickname(nick.trim());
+          }
+        }
+      } catch {
+        // 接口失败时静默，仍展示号码占位
+      } finally {
+        if (lastRequestedRef.current === userId) setLoading(false);
+      }
+    }, NICKNAME_FETCH_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [userId, source, enabled]);
+
+  return { nickname, loading };
+}
+
+function isPureQQNumber(query: string): boolean {
+  const trimmed = query.trim();
+  // QQ 号码 / 群号通常为 5-12 位纯数字
+  return /^\d{5,12}$/.test(trimmed);
+}
+
+/**
+ * 构造一个“手动添加”的 QQ/群号条目。
+ * 当用户搜索的号码不在当前列表中（既不是好友也不是已加群）时，
+ * 用 QQ 服务器的头像地址 + 号码本身作为昵称生成一个临时条目，
+ * 选中后直接把该号码写入配置。
+ */
+export function buildCustomOption(
+  id: string,
+  source?: string,
+): DatasourceOption {
+  const value = id.trim();
+  if (source === "qq_groups") {
+    return {
+      value,
+      label: value,
+      description: `群号 ${value}`,
+      meta: {
+        type: "qq_group_custom",
+        groupId: value,
+        groupName: value,
+        avatarUrl: `https://p.qlogo.cn/gh/${encodeURIComponent(value)}/${encodeURIComponent(value)}/100`,
+        searchText: value,
+        isCustom: true,
+      },
+    };
+  }
+  return {
+    value,
+    label: value,
+    description: `QQ ${value}`,
+    meta: {
+      type: "qq_friend_custom",
+      qq: value,
+      nickname: value,
+      avatarUrl: `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(value)}&s=100`,
+      searchText: value,
+      isCustom: true,
+    },
+  };
+}
+
+/**
+ * 解析已选中的值：当某个值不在 `options` 中（说明它是手动添加的），
+ * 用 `buildCustomOption` 生成一个用于展示的条目。
+ */
+export function resolveDatasourceOption(
+  value: string,
+  options: DatasourceOption[],
+  source?: string,
+): DatasourceOption | null {
+  const found = options.find((option) => option.value === String(value));
+  if (found) return found;
+  if (isPureQQNumber(value)) {
+    return buildCustomOption(value, source);
+  }
+  return null;
+}
+
+interface CustomOptionCardProps {
+  option: DatasourceOption;
+  source?: string;
+  multiple: boolean;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+function CustomOptionCard({
+  option,
+  source,
+  multiple,
+  selected,
+  onSelect,
+}: CustomOptionCardProps) {
+  const FallbackIcon = getAvatarFallback(source);
+  const isFriend = source !== "qq_groups";
+  const { nickname, loading } = useDebouncedNickname(
+    option.value,
+    source,
+    isFriend,
+  );
+
+  const displayName = nickname || option.label;
+  const secondaryText =
+    source === "qq_groups"
+      ? `群号 ${option.meta?.groupId || option.value}`
+      : `QQ ${option.meta?.qq || option.value}`;
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        "relative flex items-center gap-3 rounded-xl border p-3 text-left transition-all duration-200",
+        selected
+          ? "border-primary/55 bg-secondary/35 shadow-sm"
+          : "border-dashed border-primary/40 bg-primary/5 hover:border-primary/60 hover:bg-primary/10",
+      )}
+      onClick={onSelect}
+    >
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary/40">
+        {option.meta?.avatarUrl ? (
+          <img
+            src={option.meta.avatarUrl}
+            alt={displayName}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <FallbackIcon className="h-5 w-5 text-muted-foreground" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            "truncate text-sm font-semibold text-card-foreground",
+            loading && "opacity-70",
+          )}
+        >
+          {displayName}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">{secondaryText}</p>
+      </div>
+      {multiple ? (
+        <input
+          type="checkbox"
+          className="form-checkbox shrink-0"
+          checked={selected}
+          onChange={onSelect}
+          onClick={(event) => event.stopPropagation()}
+        />
+      ) : null}
+    </button>
+  );
+}
+
 export function DatasourcePickerDialog({
   open,
   title,
@@ -135,6 +334,24 @@ export function DatasourcePickerDialog({
     () => options.filter((option) => matchesQuery(option, query)),
     [options, query],
   );
+
+  // 当用户输入了合法的 QQ 号码/群号，且在当前数据源中未找到完全匹配时，
+  // 渲染一个“手动添加”卡片：头像来自 QQ 服务器、昵称就是这个号码，
+  // 选中后直接把号码写入配置。
+  const trimmedQuery = query.trim();
+  const hasExactMatch = useMemo(() => {
+    if (!trimmedQuery) return false;
+    return options.some(
+      (opt) =>
+        String(opt.value) === trimmedQuery ||
+        String(opt.meta?.qq) === trimmedQuery ||
+        String(opt.meta?.groupId) === trimmedQuery,
+    );
+  }, [options, trimmedQuery]);
+  const customOption =
+    trimmedQuery && isPureQQNumber(trimmedQuery) && !hasExactMatch
+      ? buildCustomOption(trimmedQuery, source)
+      : null;
 
   const FallbackIcon = getAvatarFallback(source);
 
@@ -207,78 +424,108 @@ export function DatasourcePickerDialog({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {filteredOptions.length === 0 ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+          {customOption ? (
+            <div className="space-y-2">
+              <p className="px-1 text-xs text-muted-foreground">
+                未在当前列表中找到该号码，可点击下方卡片手动添加
+              </p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <CustomOptionCard
+                  option={customOption}
+                  source={source}
+                  multiple={Boolean(multiple)}
+                  selected={draft.includes(customOption.value)}
+                  onSelect={() => {
+                    if (multiple) {
+                      toggleDraft(customOption.value);
+                      return;
+                    }
+                    commitAndClose(customOption.value);
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {filteredOptions.length > 0 ? (
+            <div className="space-y-2">
+              {customOption ? (
+                <p className="px-1 text-xs text-muted-foreground">已有匹配项</p>
+              ) : null}
+              <div className="grid gap-3 md:grid-cols-2">
+                {filteredOptions.map((option) => {
+                  const selected = draft.includes(option.value);
+                  const secondaryText =
+                    source === "qq_groups"
+                      ? `群号 ${option.meta?.groupId || option.value}${option.meta?.memberCount ? ` · ${option.meta.memberCount} 人` : ""}`
+                      : `QQ ${option.meta?.qq || option.value}${option.meta?.nickname && option.meta?.remark && option.meta.nickname !== option.meta.remark ? ` · ${option.meta.nickname}` : ""}`;
+
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={cn(
+                        "flex items-center gap-3 rounded-xl border p-3 text-left transition-all duration-200",
+                        selected
+                          ? "border-primary/45 bg-secondary/35 shadow-sm"
+                          : "border-border/80 bg-card hover:border-primary/20 hover:bg-secondary/20",
+                      )}
+                      onClick={() => {
+                        if (multiple) {
+                          toggleDraft(option.value);
+                          return;
+                        }
+                        commitAndClose(option.value);
+                      }}
+                    >
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary/40">
+                        {option.meta?.avatarUrl ? (
+                          <img
+                            src={option.meta.avatarUrl}
+                            alt={option.label}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <FallbackIcon className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="truncate text-sm font-semibold text-card-foreground">
+                            {option.label}
+                          </p>
+                          {multiple ? (
+                            <input
+                              type="checkbox"
+                              className="form-checkbox mt-0.5"
+                              checked={selected}
+                              onChange={() => toggleDraft(option.value)}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {secondaryText}
+                        </p>
+                        {option.description ? (
+                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                            {option.description}
+                          </p>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {!customOption && filteredOptions.length === 0 ? (
             <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
               {getDialogEmptyText(source)}
             </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {filteredOptions.map((option) => {
-                const selected = draft.includes(option.value);
-                const secondaryText =
-                  source === "qq_groups"
-                    ? `群号 ${option.meta?.groupId || option.value}${option.meta?.memberCount ? ` · ${option.meta.memberCount} 人` : ""}`
-                    : `QQ ${option.meta?.qq || option.value}${option.meta?.nickname && option.meta?.remark && option.meta.nickname !== option.meta.remark ? ` · ${option.meta.nickname}` : ""}`;
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl border p-3 text-left transition-all duration-200",
-                      selected
-                        ? "border-primary/45 bg-secondary/35 shadow-sm"
-                        : "border-border/80 bg-card hover:border-primary/20 hover:bg-secondary/20",
-                    )}
-                    onClick={() => {
-                      if (multiple) {
-                        toggleDraft(option.value);
-                        return;
-                      }
-                      commitAndClose(option.value);
-                    }}
-                  >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary/40">
-                      {option.meta?.avatarUrl ? (
-                        <img
-                          src={option.meta.avatarUrl}
-                          alt={option.label}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <FallbackIcon className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="truncate text-sm font-semibold text-card-foreground">
-                          {option.label}
-                        </p>
-                        {multiple ? (
-                          <input
-                            type="checkbox"
-                            className="form-checkbox mt-0.5"
-                            checked={selected}
-                            onChange={() => toggleDraft(option.value)}
-                            onClick={(event) => event.stopPropagation()}
-                          />
-                        ) : null}
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {secondaryText}
-                      </p>
-                      {option.description ? (
-                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                          {option.description}
-                        </p>
-                      ) : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          ) : null}
         </div>
 
         {multiple ? (

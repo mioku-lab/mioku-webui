@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
   DatasourcePickerDialog,
+  resolveDatasourceOption,
   type DatasourceOption,
 } from "@/features/plugin-config/DatasourcePickerDialog";
 
@@ -42,9 +43,9 @@ export function DatasourceMultiSelectField({
   const selectedOptions = useMemo(
     () =>
       value
-        .map((item) => options.find((option) => option.value === String(item)))
+        .map((item) => resolveDatasourceOption(String(item), options, source))
         .filter(Boolean) as DatasourceOption[],
-    [options, value],
+    [options, value, source],
   );
 
   useEffect(() => {

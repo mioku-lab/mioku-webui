@@ -17,6 +17,7 @@ import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   DatasourcePickerDialog,
+  resolveDatasourceOption,
   type DatasourceOption,
 } from "./DatasourcePickerDialog";
 
@@ -457,10 +458,9 @@ export function ConfigPageRenderer({
 
       case "select":
         if (field.source) {
-          const selectedOption =
-            dynamicSourceOptions.find(
-              (option) => option.value === String(value ?? ""),
-            ) || null;
+          const selectedOption = value
+            ? resolveDatasourceOption(String(value), dynamicSourceOptions, field.source)
+            : null;
 
           return (
             <div key={field.key} className="space-y-1.5 max-w-md">
@@ -569,7 +569,7 @@ export function ConfigPageRenderer({
         if (field.source) {
           const selectedOptions = selectedValues
             .map((item: string) =>
-              dynamicSourceOptions.find((option) => option.value === String(item)),
+              resolveDatasourceOption(String(item), dynamicSourceOptions, field.source),
             )
             .filter(Boolean) as DatasourceOption[];
 
