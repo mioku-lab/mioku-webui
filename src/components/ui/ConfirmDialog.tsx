@@ -1,20 +1,19 @@
 import { useEffect, useState } from "react";
-import { createRoot } from "react-dom/client";
 import { AlertTriangle } from "lucide-react";
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   title?: string;
   message: string;
   confirmText?: string;
   cancelText?: string;
 }
 
-interface ConfirmDialogProps extends ConfirmOptions {
+export interface ConfirmDialogProps extends ConfirmOptions {
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-function ConfirmDialog({
+export function ConfirmDialog({
   title = "确认",
   message,
   confirmText = "确认",
@@ -77,33 +76,4 @@ function ConfirmDialog({
       </div>
     </div>
   );
-}
-
-export function confirm(options: ConfirmOptions): Promise<boolean> {
-  return new Promise((resolve) => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    const cleanup = () => {
-      setTimeout(() => {
-        root.unmount();
-        container.remove();
-      }, 200);
-    };
-
-    root.render(
-      <ConfirmDialog
-        {...options}
-        onConfirm={() => {
-          cleanup();
-          resolve(true);
-        }}
-        onCancel={() => {
-          cleanup();
-          resolve(false);
-        }}
-      />,
-    );
-  });
 }

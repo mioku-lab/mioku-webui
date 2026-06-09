@@ -19,7 +19,7 @@ import { Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { DatasourceMultiSelectField } from "./DatasourceMultiSelectField";
-import type { DatasourceOption } from "@/features/plugin-config/DatasourcePickerDialog";
+import type { DatasourceOption } from "@/features/plugin-config/datasource-utils";
 
 type AccessRuleConfig = {
   whitelist: string[];

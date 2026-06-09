@@ -9,6 +9,7 @@ export interface NumberInputProps
   onValueChange: (value: number | null) => void;
   emptyBehavior?: EmptyBehavior;
   fallbackValue?: number;
+  ref?: React.Ref<HTMLInputElement>;
 }
 
 function formatNumberValue(value: number | null | undefined): string {
@@ -24,92 +25,86 @@ function parseNumberValue(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  (
-    {
-      value,
-      onValueChange,
-      emptyBehavior = "preserve",
-      fallbackValue,
-      onBlur,
-      onFocus,
-      ...props
-    },
-    ref,
-  ) => {
-    const [draft, setDraft] = React.useState(() => formatNumberValue(value));
-    const [focused, setFocused] = React.useState(false);
+function NumberInput({
+  value,
+  onValueChange,
+  emptyBehavior = "preserve",
+  fallbackValue,
+  onBlur,
+  onFocus,
+  ref,
+  ...props
+}: NumberInputProps) {
+  const [draft, setDraft] = React.useState(() => formatNumberValue(value));
+  const [focused, setFocused] = React.useState(false);
 
-    React.useEffect(() => {
-      if (!focused) {
-        setDraft(formatNumberValue(value));
-      }
-    }, [value, focused]);
+  React.useEffect(() => {
+    if (!focused) {
+      setDraft(formatNumberValue(value));
+    }
+  }, [value, focused]);
 
-    return (
-      <Input
-        {...props}
-        ref={ref}
-        type="number"
-        value={draft}
-        onFocus={(event) => {
-          setFocused(true);
-          onFocus?.(event);
-        }}
-        onChange={(event) => {
-          const nextValue = event.target.value;
-          setDraft(nextValue);
+  return (
+    <Input
+      {...props}
+      ref={ref}
+      type="number"
+      value={draft}
+      onFocus={(event) => {
+        setFocused(true);
+        onFocus?.(event);
+      }}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        setDraft(nextValue);
 
-          if (isTransientNumberInput(nextValue)) {
-            if (nextValue === "" && emptyBehavior === "null") {
-              onValueChange(null);
-            }
-            return;
+        if (isTransientNumberInput(nextValue)) {
+          if (nextValue === "" && emptyBehavior === "null") {
+            onValueChange(null);
           }
+          return;
+        }
 
-          const parsed = parseNumberValue(nextValue);
-          if (parsed !== null) {
-            onValueChange(parsed);
-          }
-        }}
-        onBlur={(event) => {
-          setFocused(false);
-          const nextValue = event.target.value.trim();
-
-          if (nextValue === "") {
-            if (emptyBehavior === "null") {
-              onValueChange(null);
-              setDraft("");
-            } else if (
-              emptyBehavior === "fallback" &&
-              typeof fallbackValue === "number"
-            ) {
-              onValueChange(fallbackValue);
-              setDraft(formatNumberValue(fallbackValue));
-            } else {
-              setDraft(formatNumberValue(value));
-            }
-
-            onBlur?.(event);
-            return;
-          }
-
-          const parsed = parseNumberValue(nextValue);
-          if (parsed === null) {
-            setDraft(formatNumberValue(value));
-            onBlur?.(event);
-            return;
-          }
-
+        const parsed = parseNumberValue(nextValue);
+        if (parsed !== null) {
           onValueChange(parsed);
-          setDraft(formatNumberValue(parsed));
-          onBlur?.(event);
-        }}
-      />
-    );
-  },
-);
+        }
+      }}
+      onBlur={(event) => {
+        setFocused(false);
+        const nextValue = event.target.value.trim();
 
-NumberInput.displayName = "NumberInput";
+        if (nextValue === "") {
+          if (emptyBehavior === "null") {
+            onValueChange(null);
+            setDraft("");
+          } else if (
+            emptyBehavior === "fallback" &&
+            typeof fallbackValue === "number"
+          ) {
+            onValueChange(fallbackValue);
+            setDraft(formatNumberValue(fallbackValue));
+          } else {
+            setDraft(formatNumberValue(value));
+          }
+
+          onBlur?.(event);
+          return;
+        }
+
+        const parsed = parseNumberValue(nextValue);
+        if (parsed === null) {
+          setDraft(formatNumberValue(value));
+          onBlur?.(event);
+          return;
+        }
+
+        onValueChange(parsed);
+        setDraft(formatNumberValue(parsed));
+        onBlur?.(event);
+      }}
+    />
+  );
+}
 
 export { NumberInput };

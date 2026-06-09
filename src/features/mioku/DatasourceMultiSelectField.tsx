@@ -4,9 +4,11 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
   DatasourcePickerDialog,
+} from "@/features/plugin-config/DatasourcePickerDialog";
+import {
   resolveDatasourceOption,
   type DatasourceOption,
-} from "@/features/plugin-config/DatasourcePickerDialog";
+} from "@/features/plugin-config/datasource-utils";
 
 interface DatasourceMultiSelectFieldProps {
   id: string;

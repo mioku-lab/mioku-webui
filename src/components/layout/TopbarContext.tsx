@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, use } from "react";
 import type { ReactNode } from "react";
 
 export interface TopbarContextValue {
@@ -15,7 +15,7 @@ export interface TopbarContextValue {
 export const TopbarContext = createContext<TopbarContextValue | null>(null);
 
 export function useTopbar() {
-  const ctx = useContext(TopbarContext);
+  const ctx = use(TopbarContext);
   if (!ctx) {
     throw new Error("useTopbar must be used inside TopbarContext.Provider");
   }

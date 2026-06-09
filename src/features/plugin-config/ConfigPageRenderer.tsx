@@ -15,11 +15,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { DatasourcePickerDialog } from "./DatasourcePickerDialog";
 import {
-  DatasourcePickerDialog,
   resolveDatasourceOption,
   type DatasourceOption,
-} from "./DatasourcePickerDialog";
+} from "./datasource-utils";
 
 interface ConfigField {
   key: string;

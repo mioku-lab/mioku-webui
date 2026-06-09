@@ -24,7 +24,7 @@ import { useTopbar } from "@/components/layout/TopbarContext";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { cn } from "@/lib/utils";
 import { DatasourceMultiSelectField } from "@/features/mioku/DatasourceMultiSelectField";
-import type { DatasourceOption } from "@/features/plugin-config/DatasourcePickerDialog";
+import type { DatasourceOption } from "@/features/plugin-config/datasource-utils";
 
 type Strength = "low" | "medium" | "high";
 
