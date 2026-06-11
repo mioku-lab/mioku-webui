@@ -18,13 +18,8 @@ import { useTopbar } from "@/components/layout/TopbarContext";
 import { Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
-import { DatasourceMultiSelectField } from "./DatasourceMultiSelectField";
 import type { DatasourceOption } from "@/features/plugin-config/datasource-utils";
-
-type AccessRuleConfig = {
-  whitelist: string[];
-  blacklist: string[];
-};
+import { AccessControlInline } from "@/features/access-control/AccessControlInline";
 
 type BootSystemConfig = {
   likeCommand: {
@@ -45,17 +40,12 @@ type BootSystemConfig = {
       aiPrompt: string;
     };
   };
-  messageFilter: {
-    user: AccessRuleConfig;
-    group: AccessRuleConfig;
-  };
 };
 
 type MiokuConfig = {
   owners: number[];
   admins: number[];
   napcat: NapCatConfig[];
-  plugins: string[];
   boot: BootSystemConfig;
 };
 
@@ -67,7 +57,7 @@ type NapCatConfig = {
   token: string;
 };
 
-type ConfigTab = "owners" | "admins" | "napcat" | "plugins" | "system";
+type ConfigTab = "owners" | "admins" | "napcat" | "access" | "system";
 
 const emptyBootConfig: BootSystemConfig = {
   likeCommand: {
@@ -88,23 +78,13 @@ const emptyBootConfig: BootSystemConfig = {
       aiPrompt: "",
     },
   },
-  messageFilter: {
-    user: {
-      whitelist: [],
-      blacklist: [],
-    },
-    group: {
-      whitelist: [],
-      blacklist: [],
-    },
-  },
 };
 
 const tabLabels: Record<ConfigTab, string> = {
   owners: "主人配置",
   admins: "管理员配置",
   napcat: "Onebot配置",
-  plugins: "插件开关",
+  access: "访问控制",
   system: "系统功能",
 };
 
@@ -116,8 +96,6 @@ function normalizeBootConfig(
   input?: Partial<BootSystemConfig> | null,
 ): BootSystemConfig {
   const raw = input || {};
-  const userFilterSource =
-    raw?.messageFilter?.user || (raw as any)?.messageFilter?.private;
   return {
     likeCommand: {
       ...emptyBootConfig.likeCommand,
@@ -135,16 +113,6 @@ function normalizeBootConfig(
         ...(raw.group?.welcome || {}),
       },
     },
-    messageFilter: {
-      user: {
-        ...emptyBootConfig.messageFilter.user,
-        ...(userFilterSource || {}),
-      },
-      group: {
-        ...emptyBootConfig.messageFilter.group,
-        ...(raw.messageFilter?.group || {}),
-      },
-    },
   };
 }
 
@@ -153,10 +121,8 @@ export function MiokuConfigPage() {
     owners: [],
     admins: [],
     napcat: [],
-    plugins: [],
     boot: cloneConfig(emptyBootConfig),
   });
-  const [availablePlugins, setAvailablePlugins] = useState<string[]>([]);
   const [friendOptions, setFriendOptions] = useState<DatasourceOption[]>([]);
   const [groupOptions, setGroupOptions] = useState<DatasourceOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -175,9 +141,8 @@ export function MiokuConfigPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [miokuRes, pluginsRes, friendsRes, groupsRes] = await Promise.all([
+      const [miokuRes, friendsRes, groupsRes] = await Promise.all([
         apiFetch<{ data: MiokuConfig }>("/api/config/mioku"),
-        apiFetch<{ data: string[] }>("/api/config/plugins/available"),
         apiFetch<{ data: DatasourceOption[] }>(
           "/api/plugin-config/datasources/qq_friends",
         ),
@@ -189,7 +154,6 @@ export function MiokuConfigPage() {
         owners: [],
         admins: [],
         napcat: [],
-        plugins: [],
         boot: cloneConfig(emptyBootConfig),
       };
       const normalizedConfig = {
@@ -197,7 +161,6 @@ export function MiokuConfigPage() {
         boot: normalizeBootConfig(config.boot),
       };
       setMiokuConfig(normalizedConfig);
-      setAvailablePlugins(pluginsRes.data || []);
       setFriendOptions(friendsRes.data || []);
       setGroupOptions(groupsRes.data || []);
       initialConfigRef.current = JSON.stringify(normalizedConfig);
@@ -347,18 +310,6 @@ export function MiokuConfigPage() {
         i === index ? { ...n, [field]: value } : n,
       ),
     }));
-  };
-
-  const togglePlugin = (plugin: string) => {
-    setMiokuConfig((prev) => {
-      const enabled = prev.plugins.includes(plugin);
-      return {
-        ...prev,
-        plugins: enabled
-          ? prev.plugins.filter((p) => p !== plugin)
-          : [...prev.plugins, plugin],
-      };
-    });
   };
 
   return (
@@ -532,33 +483,8 @@ export function MiokuConfigPage() {
         </Card>
       )}
 
-      {!loading && activeTab === "plugins" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>插件开关</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {availablePlugins.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无可用插件</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {availablePlugins.map((plugin) => (
-                  <button
-                    key={plugin}
-                    onClick={() => togglePlugin(plugin)}
-                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-all ${
-                      miokuConfig.plugins.includes(plugin)
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-secondary/50 text-secondary-foreground hover:bg-secondary"
-                    }`}
-                  >
-                    {plugin}
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {!loading && activeTab === "access" && (
+        <AccessControlInline />
       )}
 
       {!loading && activeTab === "system" && (
@@ -690,93 +616,6 @@ export function MiokuConfigPage() {
                   机器人新进一个群时检查。填 0 表示不限制，低于阈值自动退群
                 </p>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>消息白名单与黑名单</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <p className="text-sm text-muted-foreground">
-                某一类配置了白名单后，该类黑名单自动失效，主人和管理员不受这些名单限制。
-              </p>
-
-              <DatasourceMultiSelectField
-                id="boot-user-whitelist"
-                label="用户白名单"
-                description="只有这些人可以用"
-                placeholder="点击选择用户"
-                source="qq_friends"
-                options={friendOptions}
-                value={miokuConfig.boot.messageFilter.user.whitelist}
-                onChange={(value) =>
-                  updateBootConfig((boot) => ({
-                    ...boot,
-                    messageFilter: {
-                      ...boot.messageFilter,
-                      user: { ...boot.messageFilter.user, whitelist: value },
-                    },
-                  }))
-                }
-              />
-
-              <DatasourceMultiSelectField
-                id="boot-user-blacklist"
-                label="用户黑名单"
-                description="这些人不能使用"
-                placeholder="点击选择用户"
-                source="qq_friends"
-                options={friendOptions}
-                value={miokuConfig.boot.messageFilter.user.blacklist}
-                onChange={(value) =>
-                  updateBootConfig((boot) => ({
-                    ...boot,
-                    messageFilter: {
-                      ...boot.messageFilter,
-                      user: { ...boot.messageFilter.user, blacklist: value },
-                    },
-                  }))
-                }
-              />
-
-              <DatasourceMultiSelectField
-                id="boot-group-whitelist"
-                label="群聊白名单"
-                description="只有这些群可以用"
-                placeholder="点击选择群聊"
-                source="qq_groups"
-                options={groupOptions}
-                value={miokuConfig.boot.messageFilter.group.whitelist}
-                onChange={(value) =>
-                  updateBootConfig((boot) => ({
-                    ...boot,
-                    messageFilter: {
-                      ...boot.messageFilter,
-                      group: { ...boot.messageFilter.group, whitelist: value },
-                    },
-                  }))
-                }
-              />
-
-              <DatasourceMultiSelectField
-                id="boot-group-blacklist"
-                label="群聊黑名单"
-                description="这些群不能用"
-                placeholder="点击选择群聊"
-                source="qq_groups"
-                options={groupOptions}
-                value={miokuConfig.boot.messageFilter.group.blacklist}
-                onChange={(value) =>
-                  updateBootConfig((boot) => ({
-                    ...boot,
-                    messageFilter: {
-                      ...boot.messageFilter,
-                      group: { ...boot.messageFilter.group, blacklist: value },
-                    },
-                  }))
-                }
-              />
             </CardContent>
           </Card>
 
