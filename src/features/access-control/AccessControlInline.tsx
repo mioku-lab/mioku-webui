@@ -53,6 +53,7 @@ type AccessItem = {
   label: string;
   desc?: string;
   match?: string;
+  event?: string;
   fromHook: boolean;
 };
 
