@@ -1,0 +1,318 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { apiFetch } from "@/lib/api";
+import { useTopbar } from "@/components/layout/TopbarContext";
+import { ConfigPageRenderer } from "./ConfigPageRenderer";
+import { Save } from "lucide-react";
+import { toast } from "sonner";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+
+type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JSONValue[]
+  | { [k: string]: JSONValue };
+
+interface ConfigPageData {
+  plugin: string;
+  title: string;
+  description?: string;
+  markdown: string;
+  fields: any[];
+  hasCustomPage: boolean;
+  configs: Record<string, JSONValue>;
+}
+
+interface ConfigurableService {
+  name: string;
+  title?: string;
+  description?: string;
+  hasPage?: boolean;
+  configFiles?: string[];
+}
+
+function isEmptyConfigValue(value: JSONValue): boolean {
+  if (value == null) return true;
+  if (typeof value === "string") return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "object") return Object.keys(value).length === 0;
+  return false;
+}
+
+function filterConfigFiles(
+  input: Record<string, JSONValue>,
+): Record<string, JSONValue> {
+  return Object.fromEntries(
+    Object.entries(input || {}).filter(([, value]) => !isEmptyConfigValue(value)),
+  ) as Record<string, JSONValue>;
+}
+
+function configsEqual(a: Record<string, JSONValue>, b: Record<string, JSONValue>): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+export function ServiceConfigPage() {
+  const [services, setServices] = useState<ConfigurableService[]>([]);
+  const [selected, setSelected] = useState("");
+  const [configs, setConfigs] = useState<Record<string, JSONValue>>({});
+  const [pageData, setPageData] = useState<ConfigPageData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [navAnimSeed, setNavAnimSeed] = useState(0);
+  const lastServiceNavSignatureRef = useRef("");
+  const { setLeftContent, setRightContent } = useTopbar();
+
+  const initialConfigsRef = useRef<string>("");
+  const selectedRef = useRef("");
+  const configsRef = useRef<Record<string, JSONValue>>({});
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useUnsavedChanges(hasChanges);
+
+  selectedRef.current = selected;
+  configsRef.current = configs;
+
+  const loadConfigurableServices = async (preferredSelected?: string) => {
+    try {
+      const res = await apiFetch<any>("/api/service-config/overview");
+      const items = (res.data || []) as ConfigurableService[];
+
+      const configurable = items.filter((item) => item.hasPage || (item.configFiles && item.configFiles.length > 0));
+      setServices(configurable);
+
+      if (configurable.length === 0) {
+        setSelected("");
+        setConfigs({});
+        return;
+      }
+
+      const nextSelected =
+        preferredSelected && configurable.some((item) => item.name === preferredSelected)
+          ? preferredSelected
+          : configurable[0].name;
+
+      setSelected(nextSelected);
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : "加载服务配置失败");
+    }
+  };
+
+  useEffect(() => {
+    loadConfigurableServices().then();
+  }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+
+    const loadConfigs = async () => {
+      setLoading(true);
+      try {
+        const [pageRes, configRes] = await Promise.all([
+          apiFetch<any>(`/api/service-config/${encodeURIComponent(selected)}/page`).catch(() => ({ data: null })),
+          apiFetch<any>(`/api/service-config/${encodeURIComponent(selected)}`),
+        ]);
+
+        const filteredConfigs = filterConfigFiles(configRes.data || {});
+
+        if (!pageRes.data && Object.keys(filteredConfigs).length === 0) {
+          setServices((prev) => {
+            const next = prev.filter((item) => item.name !== selected);
+            if (next.length === 0) {
+              setSelected("");
+              setConfigs({});
+            } else {
+              setSelected(next[0].name);
+            }
+            return next;
+          });
+          return;
+        }
+
+        setConfigs(filteredConfigs);
+        initialConfigsRef.current = JSON.stringify(filteredConfigs);
+
+        if (pageRes.data) {
+          setPageData({
+            ...pageRes.data,
+            configs: filteredConfigs,
+          });
+        } else {
+          setPageData(null);
+        }
+      } catch (error) {
+        setMsg(error instanceof Error ? error.message : "加载服务配置失败");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadConfigs();
+  }, [selected]);
+
+  useEffect(() => {
+    const current = JSON.stringify(configs);
+    setHasChanges(current !== initialConfigsRef.current);
+  }, [configs]);
+
+  const serviceNavSignature = services.map((service) => service.name).join("|");
+
+  useEffect(() => {
+    if (!serviceNavSignature) return;
+    if (serviceNavSignature === lastServiceNavSignatureRef.current) return;
+    lastServiceNavSignatureRef.current = serviceNavSignature;
+    setNavAnimSeed((value) => value + 1);
+  }, [serviceNavSignature, services]);
+
+  useEffect(() => {
+    const chipClass = (active: boolean) =>
+      `topbar-chip rounded-full border px-3 py-1.5 text-xs ${
+        active
+          ? "border-transparent bg-primary text-primary-foreground shadow-md"
+          : "border-transparent bg-secondary text-secondary-foreground"
+      }`;
+
+    setLeftContent(
+      <div className="topbar-chip-scroll flex items-center gap-2 overflow-x-auto whitespace-nowrap py-1">
+        {services.map((service, index) => (
+          <span
+            key={`${service.name}-${navAnimSeed}`}
+            className="topbar-nav-item-enter"
+            style={{ animationDelay: `${index * 45}ms` }}
+          >
+            <button
+              type="button"
+              onClick={() => setSelected(service.name)}
+              className={chipClass(selected === service.name)}
+            >
+              {service.name}
+            </button>
+          </span>
+        ))}
+      </div>,
+    );
+
+    return () => setLeftContent(null);
+  }, [navAnimSeed, services, selected, setLeftContent]);
+
+  const handleConfigChange = useCallback((newConfigs: Record<string, JSONValue>) => {
+    setConfigs(newConfigs);
+  }, []);
+
+  const saveAll = async () => {
+    const currentSelected = selectedRef.current;
+    const currentConfigs = configsRef.current;
+    if (!currentSelected) return;
+    setSaving(true);
+
+    try {
+      for (const [fileName, value] of Object.entries(currentConfigs)) {
+        await apiFetch(`/api/service-config/${encodeURIComponent(currentSelected)}/${fileName}`, {
+          method: "PUT",
+          body: JSON.stringify(value),
+        });
+      }
+
+      toast.success("配置已保存");
+      initialConfigsRef.current = JSON.stringify(currentConfigs);
+      setHasChanges(false);
+      await loadConfigurableServices(currentSelected);
+    } catch (error) {
+      toast.error("保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    setRightContent(
+      <Button
+        onClick={saveAll}
+        disabled={saving || !hasChanges}
+        size="sm"
+        className="animate-fade-in"
+      >
+        <Save className="h-4 w-4 sm:mr-1" />
+        <span className="hidden sm:inline">保存配置</span>
+      </Button>,
+    );
+    return () => setRightContent(null);
+  }, [saving, hasChanges, setRightContent, selected]);
+
+  const updateConfigText = (fileName: string, raw: string) => {
+    try {
+      const parsed = JSON.parse(raw) as JSONValue;
+      setConfigs((prev) => ({ ...prev, [fileName]: parsed }));
+    } catch {
+      // ignore invalid json while typing
+    }
+  };
+
+  const configEntries = Object.entries(configs);
+
+  if (loading && !selected) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <p className="text-muted-foreground">加载中...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 animate-soft-pop">
+      {!pageData?.hasCustomPage && (
+        <Card>
+          <CardHeader>
+            <CardTitle>服务配置管理</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {services.length === 0 ? (
+              <p className="text-sm text-muted-foreground">暂无可配置服务</p>
+            ) : null}
+
+            {services.length > 0 && selected && configEntries.length === 0 ? (
+              <p className="text-sm text-muted-foreground">当前服务没有可配置内容</p>
+            ) : null}
+
+            {configEntries.map(([name, value]) => (
+              <div key={name} className="space-y-3 rounded-md border p-3">
+                <p className="text-sm font-semibold">{name}.json</p>
+                <Textarea
+                  className="min-h-32 font-mono text-xs"
+                  value={JSON.stringify(value, null, 2)}
+                  onChange={(event) => updateConfigText(name, event.target.value)}
+                />
+              </div>
+            ))}
+
+            {msg ? <p className="text-sm text-primary">{msg}</p> : null}
+          </CardContent>
+        </Card>
+      )}
+
+      {pageData?.hasCustomPage && pageData && (
+        <Card>
+          <CardHeader className="gap-1.5">
+            <CardTitle className="text-base">{pageData.title}</CardTitle>
+            {pageData.description && (
+              <p className="text-sm text-muted-foreground">{pageData.description}</p>
+            )}
+          </CardHeader>
+          <CardContent>
+            <ConfigPageRenderer
+              pageData={pageData}
+              configs={configs}
+              onConfigChange={handleConfigChange}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {msg && !pageData?.hasCustomPage ? <p className="text-sm text-primary">{msg}</p> : null}
+    </div>
+  );
+}

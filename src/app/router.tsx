@@ -14,6 +14,7 @@ import {
   PluginManagePage,
   PluginStorePage,
   Protected,
+  ServiceConfigPage,
   ServiceManagePage,
   WebUIManagePage,
 } from "./router-elements";
@@ -74,6 +75,14 @@ export const router = createBrowserRouter([
         element: (
           <LazyWrap>
             <PluginConfigPage />
+          </LazyWrap>
+        ),
+      },
+      {
+        path: "service-config",
+        element: (
+          <LazyWrap>
+            <ServiceConfigPage />
           </LazyWrap>
         ),
       },

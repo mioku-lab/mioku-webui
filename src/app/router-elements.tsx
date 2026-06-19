@@ -30,6 +30,11 @@ export const PluginConfigPage = lazy(() =>
     default: m.PluginConfigPage,
   })),
 );
+export const ServiceConfigPage = lazy(() =>
+  import("@/features/plugin-config/ServiceConfigPage").then((m) => ({
+    default: m.ServiceConfigPage,
+  })),
+);
 export const DataManagementPage = lazy(() =>
   import("@/features/data-management/DataManagementPage").then((m) => ({
     default: m.DataManagementPage,
