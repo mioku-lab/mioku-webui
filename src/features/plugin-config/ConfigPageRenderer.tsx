@@ -304,15 +304,20 @@ export function ConfigPageRenderer({
       case "select":
         return (
           <Select
-            value={String(value ?? "")}
-            onValueChange={(next) => onChange(next)}
+            value={String(value ?? "") || emptySelectValue}
+            onValueChange={(next) => onChange(next === emptySelectValue ? "" : next)}
           >
             <SelectTrigger id={`sub-${subField.key}`}>
               <SelectValue placeholder={subField.placeholder || "请选择"} />
             </SelectTrigger>
             <SelectContent>
               {subField.options?.map((opt: any) => (
-                <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
+                <SelectItem
+                  key={opt.value || emptySelectValue}
+                  value={String(opt.value) || emptySelectValue}
+                >
+                  {opt.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -521,6 +526,9 @@ export function ConfigPageRenderer({
         }
 
         const options = field.options || [];
+        const hasEmptyOption = options.some(
+          (opt: any) => String(opt.value) === "",
+        );
         const selectValue = value == null ? "" : String(value);
 
         return (
@@ -544,13 +552,16 @@ export function ConfigPageRenderer({
                     <SelectValue placeholder={field.placeholder || "请选择"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {!field.required ? (
+                    {!field.required && !hasEmptyOption ? (
                       <SelectItem value={emptySelectValue}>
                         {field.placeholder || "请选择"}
                       </SelectItem>
                     ) : null}
                     {options.map((opt: any) => (
-                      <SelectItem key={opt.value} value={String(opt.value)}>
+                      <SelectItem
+                        key={opt.value || emptySelectValue}
+                        value={String(opt.value) || emptySelectValue}
+                      >
                         {opt.label}
                       </SelectItem>
                     ))}

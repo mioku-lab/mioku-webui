@@ -46,7 +46,7 @@ export function LoginPage() {
       <Card className="w-full max-w-md animate-soft-pop">
         <CardHeader>
           <CardTitle>Mioku WebUI 登录</CardTitle>
-          <CardDescription>请输入 config/webui/auth.json 中的 token</CardDescription>
+          <CardDescription>请输入 config/service/webui/auth.json 中的 token</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-3">
