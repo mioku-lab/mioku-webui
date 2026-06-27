@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Save } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -97,12 +97,15 @@ type SettingsConfig = {
   };
 };
 
+type EmotionConfig = {
+  defaultEmotion: string;
+  updateIntervalMs: number;
+  emotions: Record<string, { examples: string[] }>;
+};
+
 type PersonalizationConfig = {
   persona: string;
-  personality: {
-    states: string[];
-    stateProbability: number;
-  };
+  emotion: EmotionConfig;
   replyStyle: {
     baseStyle: string;
     multipleStyles: string[];
@@ -222,9 +225,17 @@ const emptySettingsConfig: SettingsConfig = {
 
 const emptyPersonalizationConfig: PersonalizationConfig = {
   persona: "",
-  personality: {
-    states: [],
-    stateProbability: 0.15,
+  emotion: {
+    defaultEmotion: "default",
+    updateIntervalMs: 3600000,
+    emotions: {
+      default: { examples: [] },
+      happy: { examples: [] },
+      sad: { examples: [] },
+      angry: { examples: [] },
+      fear: { examples: [] },
+      surprise: { examples: [] },
+    },
   },
   replyStyle: {
     baseStyle: "",
@@ -297,15 +308,55 @@ function sanitizeSettingsForSave(settings: SettingsConfig): SettingsConfig {
   };
 }
 
+function normalizeEmotionConfig(value: unknown): EmotionConfig {
+  const source = (
+    value && typeof value === "object" ? value : {}
+  ) as Partial<EmotionConfig>;
+  const defaultConfig = emptyPersonalizationConfig.emotion;
+  const rawEmotions =
+    source.emotions && typeof source.emotions === "object"
+      ? source.emotions
+      : defaultConfig.emotions;
+  const emotions: EmotionConfig["emotions"] = {};
+
+  for (const [name, entry] of Object.entries(rawEmotions)) {
+    const normalizedName = name.trim().toLowerCase();
+    if (!normalizedName) continue;
+    const rawEntry = entry && typeof entry === "object" ? entry : {};
+    emotions[normalizedName] = {
+      examples: compactLineArray((rawEntry as { examples?: unknown }).examples),
+    };
+  }
+
+  const allowedDefaultEmotions = new Set(["default", ...Object.keys(emotions)]);
+  const defaultEmotionCandidate = String(
+    source.defaultEmotion || defaultConfig.defaultEmotion,
+  )
+    .trim()
+    .toLowerCase();
+  const defaultEmotion = allowedDefaultEmotions.has(defaultEmotionCandidate)
+    ? defaultEmotionCandidate
+    : "default";
+  if (!emotions[defaultEmotion]) {
+    emotions[defaultEmotion] = { examples: [] };
+  }
+
+  return {
+    defaultEmotion,
+    updateIntervalMs:
+      typeof source.updateIntervalMs === "number" && source.updateIntervalMs > 0
+        ? source.updateIntervalMs
+        : defaultConfig.updateIntervalMs,
+    emotions,
+  };
+}
+
 function sanitizePersonalizationForSave(
   personalization: PersonalizationConfig,
 ): PersonalizationConfig {
   return {
     ...personalization,
-    personality: {
-      ...personalization.personality,
-      states: compactLineArray(personalization.personality.states),
-    },
+    emotion: normalizeEmotionConfig(personalization.emotion),
     replyStyle: {
       ...personalization.replyStyle,
       multipleStyles: compactLineArray(
@@ -412,10 +463,9 @@ export function AIConfigPage() {
         persona: normalizeEscapedNewlines(
           personalizationRes.data?.persona || "",
         ),
-        personality: {
-          ...emptyPersonalizationConfig.personality,
-          ...(personalizationRes.data?.personality || {}),
-        },
+        emotion: normalizeEmotionConfig(
+          (personalizationRes.data as Partial<PersonalizationConfig>)?.emotion,
+        ),
         replyStyle: {
           ...emptyPersonalizationConfig.replyStyle,
           ...(personalizationRes.data?.replyStyle || {}),
@@ -669,9 +719,9 @@ export function AIConfigPage() {
       hint: "系统已加载的扩展能力",
     },
     {
-      label: "人格 / 风格",
-      value: `${personalization.personality.states.length} / ${personalization.replyStyle.multipleStyles.length}`,
-      hint: "已配置的人格和回复风格数量",
+      label: "情绪 / 风格",
+      value: `${Object.keys(personalization.emotion.emotions).length} / ${personalization.replyStyle.multipleStyles.length}`,
+      hint: "已配置的情绪和回复风格数量",
     },
     {
       label: "能力状态",
@@ -679,6 +729,78 @@ export function AIConfigPage() {
       hint: "记忆、话题、搜索、网页阅读等能力",
     },
   ];
+
+  const updateEmotionExamples = (emotionName: string, examples: string[]) => {
+    const normalizedName = emotionName.trim().toLowerCase();
+    if (!normalizedName) return;
+    setPersonalization((prev) => ({
+      ...prev,
+      emotion: {
+        ...prev.emotion,
+        emotions: {
+          ...prev.emotion.emotions,
+          [normalizedName]: { examples },
+        },
+      },
+    }));
+  };
+
+  const addEmotion = () => {
+    let index = 1;
+    let name = `custom${index}`;
+    while (personalization.emotion.emotions[name]) {
+      index += 1;
+      name = `custom${index}`;
+    }
+    updateEmotionExamples(name, []);
+  };
+
+  const removeEmotion = (emotionName: string) => {
+    setPersonalization((prev) => {
+      const normalizedName = emotionName.trim().toLowerCase();
+      if (!normalizedName || normalizedName === prev.emotion.defaultEmotion) {
+        return prev;
+      }
+      const { [normalizedName]: _removed, ...nextEmotions } =
+        prev.emotion.emotions;
+      return {
+        ...prev,
+        emotion: {
+          ...prev.emotion,
+          emotions: nextEmotions,
+        },
+      };
+    });
+  };
+
+  const renameEmotion = (oldName: string, nextName: string) => {
+    const normalizedOldName = oldName.trim().toLowerCase();
+    const normalizedNextName = nextName.trim().toLowerCase();
+    if (!normalizedOldName || !normalizedNextName) return;
+    setPersonalization((prev) => {
+      if (!prev.emotion.emotions[normalizedOldName]) return prev;
+      const { [normalizedOldName]: entry, ...rest } = prev.emotion.emotions;
+      const emotions = {
+        ...rest,
+        [normalizedNextName]: entry,
+      };
+      return {
+        ...prev,
+        emotion: {
+          ...prev.emotion,
+          defaultEmotion:
+            prev.emotion.defaultEmotion === normalizedOldName
+              ? normalizedNextName
+              : prev.emotion.defaultEmotion,
+          emotions,
+        },
+      };
+    });
+  };
+
+  const emotionOptions = Array.from(
+    new Set(["default", ...Object.keys(personalization.emotion.emotions)]),
+  );
 
   const renderModelTab = () => (
     <div className="space-y-4">
@@ -1323,69 +1445,16 @@ export function AIConfigPage() {
             />
           </Field>
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="人格状态" hint="每行一个状态，bot 会随机切换">
+            <Field label="基础说话风格" hint="长期稳定生效的语气说明">
               <Textarea
-                className="min-h-48"
-                value={arrayToLines(personalization.personality.states)}
-                onChange={(e) =>
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    personality: {
-                      ...prev.personality,
-                      states: linesToArray(e.target.value),
-                    },
-                  }))
-                }
-              />
-            </Field>
-            <div className="space-y-4">
-              <Field
-                label="人格切换概率"
-                hint="0 到 1 之间，越高越容易切换状态"
-              >
-                <NumberInput
-                  step="0.01"
-                  value={personalization.personality.stateProbability}
-                  onValueChange={(value) => {
-                    if (value === null) return;
-                    setPersonalization((prev) => ({
-                      ...prev,
-                      personality: {
-                        ...prev.personality,
-                        stateProbability: value,
-                      },
-                    }));
-                  }}
-                />
-              </Field>
-              <Field label="基础说话风格" hint="长期稳定生效的语气说明">
-                <Textarea
-                  className="min-h-32"
-                  value={personalization.replyStyle.baseStyle}
-                  onChange={(e) =>
-                    setPersonalization((prev) => ({
-                      ...prev,
-                      replyStyle: {
-                        ...prev.replyStyle,
-                        baseStyle: e.target.value,
-                      },
-                    }))
-                  }
-                />
-              </Field>
-            </div>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="可切换风格" hint="每行一个临时风格，会按概率混入回复">
-              <Textarea
-                className="min-h-48"
-                value={arrayToLines(personalization.replyStyle.multipleStyles)}
+                className="min-h-32"
+                value={personalization.replyStyle.baseStyle}
                 onChange={(e) =>
                   setPersonalization((prev) => ({
                     ...prev,
                     replyStyle: {
                       ...prev.replyStyle,
-                      multipleStyles: linesToArray(e.target.value),
+                      baseStyle: e.target.value,
                     },
                   }))
                 }
@@ -1407,6 +1476,124 @@ export function AIConfigPage() {
                 }}
               />
             </Field>
+          </div>
+          <Field label="可切换风格" hint="每行一个临时风格，会按概率混入回复">
+            <Textarea
+              className="min-h-48"
+              value={arrayToLines(personalization.replyStyle.multipleStyles)}
+              onChange={(e) =>
+                setPersonalization((prev) => ({
+                  ...prev,
+                  replyStyle: {
+                    ...prev.replyStyle,
+                    multipleStyles: linesToArray(e.target.value),
+                  },
+                }))
+              }
+            />
+          </Field>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>情绪系统</CardTitle>
+              <CardDescription>决定 bot 当前情绪</CardDescription>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addEmotion}
+            >
+              <Plus className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">添加情绪</span>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="默认情绪" hint="参考发言为空时也会回退到默认情绪">
+              <SelectField
+                value={personalization.emotion.defaultEmotion}
+                onChange={(value) =>
+                  setPersonalization((prev) => ({
+                    ...prev,
+                    emotion: { ...prev.emotion, defaultEmotion: value },
+                  }))
+                }
+                options={emotionOptions.map((emotionName) => ({
+                  label: emotionName,
+                  value: emotionName,
+                }))}
+              />
+            </Field>
+            <Field
+              label="情绪更新间隔 (分钟)"
+              hint="超过这个时间后，下次聊天将刷新情绪"
+            >
+              <NumberInput
+                min={1}
+                value={Math.round(
+                  personalization.emotion.updateIntervalMs / 60000,
+                )}
+                onValueChange={(value) => {
+                  if (value === null) return;
+                  setPersonalization((prev) => ({
+                    ...prev,
+                    emotion: {
+                      ...prev.emotion,
+                      updateIntervalMs: value * 60000,
+                    },
+                  }));
+                }}
+              />
+            </Field>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {Object.entries(personalization.emotion.emotions).map(
+              ([emotionName, entry]) => (
+                <div
+                  key={emotionName}
+                  className="rounded-xl border bg-card/78 p-4"
+                >
+                  <div className="mb-3 flex items-center gap-2">
+                    <Input
+                      value={emotionName}
+                      onChange={(event) =>
+                        renameEmotion(emotionName, event.target.value)
+                      }
+                      aria-label="情绪名称"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        emotionName === personalization.emotion.defaultEmotion
+                      }
+                      onClick={() => removeEmotion(emotionName)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Field label="角色发言参考" hint="模型会模仿参考语气">
+                    <Textarea
+                      className="min-h-32"
+                      value={arrayToLines(entry.examples)}
+                      onChange={(event) =>
+                        updateEmotionExamples(
+                          emotionName,
+                          linesToArray(event.target.value),
+                        )
+                      }
+                    />
+                  </Field>
+                </div>
+              ),
+            )}
           </div>
         </CardContent>
       </Card>
@@ -2082,6 +2269,7 @@ function countEnabledCapabilities(
   settings: SettingsConfig,
 ): number {
   return [
+    true,
     personalization.memory.enabled,
     personalization.topic.enabled,
     personalization.planner.enabled,
