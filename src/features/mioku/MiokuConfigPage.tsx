@@ -38,6 +38,7 @@ type BootSystemConfig = {
       mode: "ai" | "text";
       text: string;
       aiPrompt: string;
+      batchWindowMs: number;
     };
   };
 };
@@ -76,6 +77,7 @@ const emptyBootConfig: BootSystemConfig = {
       mode: "ai",
       text: "欢迎新人～",
       aiPrompt: "",
+      batchWindowMs: 20000,
     },
   },
 };
@@ -96,7 +98,7 @@ function normalizeBootConfig(
   input?: Partial<BootSystemConfig> | null,
 ): BootSystemConfig {
   const raw = input || {};
-  return {
+  const merged: BootSystemConfig = {
     likeCommand: {
       ...emptyBootConfig.likeCommand,
       ...(raw.likeCommand || {}),
@@ -114,6 +116,12 @@ function normalizeBootConfig(
       },
     },
   };
+  const batchRaw = Number(merged.group.welcome.batchWindowMs);
+  merged.group.welcome.batchWindowMs =
+    Number.isFinite(batchRaw) && batchRaw >= 0
+      ? Math.floor(batchRaw)
+      : emptyBootConfig.group.welcome.batchWindowMs;
+  return merged;
 }
 
 export function MiokuConfigPage() {
@@ -717,6 +725,35 @@ export function MiokuConfigPage() {
                 />
                 <p className="text-sm text-muted-foreground">
                   作为额外要求传给模型，默认留空即可
+                </p>
+              </div>
+
+              <div className="space-y-2 max-w-sm">
+                <Label htmlFor="boot-welcome-batch-window">
+                  AI 欢迎聚合窗口 (毫秒)
+                </Label>
+                <NumberInput
+                  id="boot-welcome-batch-window"
+                  value={miokuConfig.boot.group.welcome.batchWindowMs}
+                  onValueChange={(value) => {
+                    if (value == null) return;
+                    updateBootConfig((boot) => ({
+                      ...boot,
+                      group: {
+                        ...boot.group,
+                        welcome: {
+                          ...boot.group.welcome,
+                          batchWindowMs: value,
+                        },
+                      },
+                    }));
+                  }}
+                  placeholder="20000"
+                  className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <p className="text-sm text-muted-foreground">
+                  短时间内多个新成员入群时，攒齐该时长内的成员后只发一次 AI
+                  欢迎，避免频繁调用模型。设为 0 表示关闭聚合、逐个欢迎。默认 20000。
                 </p>
               </div>
             </CardContent>
