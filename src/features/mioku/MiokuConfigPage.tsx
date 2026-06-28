@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -33,13 +32,6 @@ type BootSystemConfig = {
   };
   group: {
     minMemberCount: number;
-    welcome: {
-      enabled: boolean;
-      mode: "ai" | "text";
-      text: string;
-      aiPrompt: string;
-      batchWindowMs: number;
-    };
   };
 };
 
@@ -72,13 +64,6 @@ const emptyBootConfig: BootSystemConfig = {
   },
   group: {
     minMemberCount: 0,
-    welcome: {
-      enabled: true,
-      mode: "ai",
-      text: "欢迎新人～",
-      aiPrompt: "",
-      batchWindowMs: 20000,
-    },
   },
 };
 
@@ -110,17 +95,11 @@ function normalizeBootConfig(
     group: {
       ...emptyBootConfig.group,
       ...(raw.group || {}),
-      welcome: {
-        ...emptyBootConfig.group.welcome,
-        ...(raw.group?.welcome || {}),
-      },
+      minMemberCount:
+        Number(raw.group?.minMemberCount) ||
+        emptyBootConfig.group.minMemberCount,
     },
   };
-  const batchRaw = Number(merged.group.welcome.batchWindowMs);
-  merged.group.welcome.batchWindowMs =
-    Number.isFinite(batchRaw) && batchRaw >= 0
-      ? Math.floor(batchRaw)
-      : emptyBootConfig.group.welcome.batchWindowMs;
   return merged;
 }
 
@@ -491,9 +470,7 @@ export function MiokuConfigPage() {
         </Card>
       )}
 
-      {!loading && activeTab === "access" && (
-        <AccessControlInline />
-      )}
+      {!loading && activeTab === "access" && <AccessControlInline />}
 
       {!loading && activeTab === "system" && (
         <>
@@ -622,138 +599,6 @@ export function MiokuConfigPage() {
                 />
                 <p className="text-sm text-muted-foreground">
                   机器人新进一个群时检查。填 0 表示不限制，低于阈值自动退群
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>新人入群欢迎</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between rounded-xl border p-4">
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium">启用入群欢迎</Label>
-                  <p className="text-sm text-muted-foreground">
-                    有新人入群时发送欢迎消息
-                  </p>
-                </div>
-                <Switch
-                  checked={miokuConfig.boot.group.welcome.enabled}
-                  onCheckedChange={(checked) =>
-                    updateBootConfig((boot) => ({
-                      ...boot,
-                      group: {
-                        ...boot.group,
-                        welcome: { ...boot.group.welcome, enabled: checked },
-                      },
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2 max-w-sm">
-                <Label htmlFor="boot-welcome-mode">欢迎模式</Label>
-                <Select
-                  value={miokuConfig.boot.group.welcome.mode}
-                  onValueChange={(value: "ai" | "text") =>
-                    updateBootConfig((boot) => ({
-                      ...boot,
-                      group: {
-                        ...boot.group,
-                        welcome: { ...boot.group.welcome, mode: value },
-                      },
-                    }))
-                  }
-                >
-                  <SelectTrigger id="boot-welcome-mode">
-                    <SelectValue placeholder="选择欢迎模式" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ai">使用AI生成</SelectItem>
-                    <SelectItem value="text">固定文本</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="boot-welcome-text">固定欢迎文本</Label>
-                <Textarea
-                  id="boot-welcome-text"
-                  value={miokuConfig.boot.group.welcome.text}
-                  onChange={(event) =>
-                    updateBootConfig((boot) => ({
-                      ...boot,
-                      group: {
-                        ...boot.group,
-                        welcome: {
-                          ...boot.group.welcome,
-                          text: event.target.value,
-                        },
-                      },
-                    }))
-                  }
-                  placeholder="欢迎新人～"
-                  className="min-h-28"
-                />
-                <p className="text-sm text-muted-foreground">
-                  支持 <code>{"{user}"}</code> 和 <code>{"{group}"}</code>{" "}
-                  占位符。
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="boot-welcome-ai-prompt">AI欢迎额外提示词</Label>
-                <Textarea
-                  id="boot-welcome-ai-prompt"
-                  value={miokuConfig.boot.group.welcome.aiPrompt}
-                  onChange={(event) =>
-                    updateBootConfig((boot) => ({
-                      ...boot,
-                      group: {
-                        ...boot.group,
-                        welcome: {
-                          ...boot.group.welcome,
-                          aiPrompt: event.target.value,
-                        },
-                      },
-                    }))
-                  }
-                  placeholder="例如：提醒新成员查看群公告"
-                  className="min-h-28"
-                />
-                <p className="text-sm text-muted-foreground">
-                  作为额外要求传给模型，默认留空即可
-                </p>
-              </div>
-
-              <div className="space-y-2 max-w-sm">
-                <Label htmlFor="boot-welcome-batch-window">
-                  AI 欢迎聚合窗口 (毫秒)
-                </Label>
-                <NumberInput
-                  id="boot-welcome-batch-window"
-                  value={miokuConfig.boot.group.welcome.batchWindowMs}
-                  onValueChange={(value) => {
-                    if (value == null) return;
-                    updateBootConfig((boot) => ({
-                      ...boot,
-                      group: {
-                        ...boot.group,
-                        welcome: {
-                          ...boot.group.welcome,
-                          batchWindowMs: value,
-                        },
-                      },
-                    }));
-                  }}
-                  placeholder="20000"
-                  className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                />
-                <p className="text-sm text-muted-foreground">
-                  短时间内多个新成员入群时，攒齐该时长内的成员后只发一次 AI
-                  欢迎，避免频繁调用模型。设为 0 表示关闭聚合、逐个欢迎。默认 20000。
                 </p>
               </div>
             </CardContent>

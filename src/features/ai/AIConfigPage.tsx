@@ -776,7 +776,13 @@ export function AIConfigPage() {
   const renameEmotion = (oldName: string, nextName: string) => {
     const normalizedOldName = oldName.trim().toLowerCase();
     const normalizedNextName = nextName.trim().toLowerCase();
-    if (!normalizedOldName || !normalizedNextName) return;
+    if (
+      !normalizedOldName ||
+      !normalizedNextName ||
+      normalizedOldName === normalizedNextName
+    ) {
+      return;
+    }
     setPersonalization((prev) => {
       if (!prev.emotion.emotions[normalizedOldName]) return prev;
       const { [normalizedOldName]: entry, ...rest } = prev.emotion.emotions;
@@ -1554,44 +1560,18 @@ export function AIConfigPage() {
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             {Object.entries(personalization.emotion.emotions).map(
-              ([emotionName, entry]) => (
-                <div
-                  key={emotionName}
-                  className="rounded-xl border bg-card/78 p-4"
-                >
-                  <div className="mb-3 flex items-center gap-2">
-                    <Input
-                      value={emotionName}
-                      onChange={(event) =>
-                        renameEmotion(emotionName, event.target.value)
-                      }
-                      aria-label="情绪名称"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={
-                        emotionName === personalization.emotion.defaultEmotion
-                      }
-                      onClick={() => removeEmotion(emotionName)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Field label="角色发言参考" hint="模型会模仿参考语气">
-                    <Textarea
-                      className="min-h-32"
-                      value={arrayToLines(entry.examples)}
-                      onChange={(event) =>
-                        updateEmotionExamples(
-                          emotionName,
-                          linesToArray(event.target.value),
-                        )
-                      }
-                    />
-                  </Field>
-                </div>
+              ([emotionName, entry], index) => (
+                <EmotionEditorCard
+                  key={`emotion-${index}-${emotionName}`}
+                  emotionName={emotionName}
+                  examples={entry.examples}
+                  isDefault={emotionName === personalization.emotion.defaultEmotion}
+                  onRename={(nextName) => renameEmotion(emotionName, nextName)}
+                  onRemove={() => removeEmotion(emotionName)}
+                  onExamplesChange={(examples) =>
+                    updateEmotionExamples(emotionName, examples)
+                  }
+                />
               ),
             )}
           </div>
@@ -2282,4 +2262,76 @@ function countEnabledCapabilities(
     settings.enableExternalSkills,
     settings.enableMarkdownScreenshot,
   ].filter(Boolean).length;
+}
+
+function EmotionEditorCard({
+  emotionName,
+  examples,
+  isDefault,
+  onRename,
+  onRemove,
+  onExamplesChange,
+}: {
+  emotionName: string;
+  examples: string[];
+  isDefault: boolean;
+  onRename: (nextName: string) => void;
+  onRemove: () => void;
+  onExamplesChange: (examples: string[]) => void;
+}) {
+  const [nameDraft, setNameDraft] = useState(emotionName);
+
+  useEffect(() => {
+    setNameDraft(emotionName);
+  }, [emotionName]);
+
+  const commitRename = () => {
+    const trimmed = nameDraft.trim().toLowerCase();
+    if (trimmed === emotionName) {
+      setNameDraft(emotionName);
+      return;
+    }
+    if (!trimmed) {
+      setNameDraft(emotionName);
+      return;
+    }
+    onRename(trimmed);
+  };
+
+  return (
+    <div className="rounded-xl border bg-card/78 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Input
+          value={nameDraft}
+          onChange={(event) => setNameDraft(event.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commitRename();
+            } else if (event.key === "Escape") {
+              setNameDraft(emotionName);
+            }
+          }}
+          aria-label="情绪名称"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={isDefault}
+          onClick={onRemove}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+      <Field label="角色发言参考" hint="模型会模仿参考语气">
+        <Textarea
+          className="min-h-32"
+          value={arrayToLines(examples)}
+          onChange={(event) => onExamplesChange(linesToArray(event.target.value))}
+        />
+      </Field>
+    </div>
+  );
 }
