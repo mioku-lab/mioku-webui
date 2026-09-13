@@ -54,6 +54,8 @@ type AccessItem = {
   desc?: string;
   match?: string;
   event?: string;
+  permission?: string;
+  priority?: number;
   fromHook: boolean;
 };
 
@@ -704,6 +706,13 @@ function EntryRow(props: {
         {info?.desc ? (
           <div className="mt-0.5 truncate text-xs text-muted-foreground">
             {info.desc}
+          </div>
+        ) : null}
+        {!isPlugin && (info?.permission || info?.priority !== undefined) ? (
+          <div className="mt-0.5 text-[10px] text-muted-foreground">
+            {[info.permission, info.priority !== undefined ? `优先级 ${info.priority}` : ""]
+              .filter(Boolean)
+              .join(" · ")}
           </div>
         ) : null}
       </div>

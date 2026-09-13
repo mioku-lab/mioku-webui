@@ -11,6 +11,8 @@ type AccessItem = {
   desc?: string;
   match?: string;
   event?: string;
+  permission?: string;
+  priority?: number;
   fromHook: boolean;
 };
 
@@ -201,10 +203,20 @@ export function AccessCatalogPickerDialog({
                             hook
                           </span>
                         ) : null}
+                        {!isPlugin && it.permission ? (
+                          <span className="rounded bg-sky-500/15 px-1 text-[10px] text-sky-700 dark:text-sky-300">
+                            {it.permission}
+                          </span>
+                        ) : null}
                       </div>
                       {it.desc ? (
                         <div className="mt-0.5 truncate text-xs text-muted-foreground">
                           {it.desc}
+                        </div>
+                      ) : null}
+                      {!isPlugin && it.priority !== undefined ? (
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">
+                          优先级 {it.priority}
                         </div>
                       ) : null}
                     </div>
