@@ -150,18 +150,15 @@ const emptyForm = (): ProviderForm => ({
 type Props = {
   temperature: number;
   maxIterations: number;
-  maxContextTokens: number;
   onBaseChange: (patch: {
     temperature?: number;
     maxIterations?: number;
-    maxContextTokens?: number;
   }) => void;
 };
 
 export function ProvidersModelsTab({
   temperature,
   maxIterations,
-  maxContextTokens,
   onBaseChange,
 }: Props) {
   const [providers, setProviders] = useState<AIProvider[]>([]);
@@ -896,7 +893,7 @@ export function ProvidersModelsTab({
           <CardTitle>生成参数</CardTitle>
           <CardDescription>仍保存在 chat/base（与提供商无关）</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
             <p className="text-sm font-medium">温度</p>
             <Input
@@ -915,16 +912,6 @@ export function ProvidersModelsTab({
               value={maxIterations}
               onChange={(e) =>
                 onBaseChange({ maxIterations: Number(e.target.value) })
-              }
-            />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">上下文 token 上限(k)</p>
-            <Input
-              type="number"
-              value={maxContextTokens}
-              onChange={(e) =>
-                onBaseChange({ maxContextTokens: Number(e.target.value) })
               }
             />
           </div>

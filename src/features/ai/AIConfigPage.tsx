@@ -50,7 +50,6 @@ type BaseConfig = {
   multimodalWorkingModel?: string;
   isMultimodal?: boolean;
   enableMediaRecognition: boolean;
-  maxContextTokens: number;
   temperature: number;
   historyCount: number;
   maxIterations: number;
@@ -77,9 +76,6 @@ type SettingsConfig = {
   };
   audio: {
     enabled: boolean;
-    baseUrl: string;
-    apiKey: string;
-    timeoutMs: number;
   };
   blacklistGroups: string[];
   whitelistGroups: string[];
@@ -184,7 +180,6 @@ const configTabs = [
 
 const emptyBaseConfig: BaseConfig = {
   enableMediaRecognition: true,
-  maxContextTokens: 256,
   temperature: 0.8,
   historyCount: 100,
   maxIterations: 20,
@@ -210,9 +205,6 @@ const emptySettingsConfig: SettingsConfig = {
   },
   audio: {
     enabled: false,
-    baseUrl: "http://127.0.0.1:9880",
-    apiKey: "",
-    timeoutMs: 20000,
   },
   blacklistGroups: [],
   whitelistGroups: [],
@@ -586,7 +578,6 @@ export function AIConfigPage() {
         sanitizePersonalizationForSave(personalization);
       const basePayload = {
         enableMediaRecognition: base.enableMediaRecognition,
-        maxContextTokens: base.maxContextTokens,
         temperature: base.temperature,
         historyCount: base.historyCount,
         maxIterations: base.maxIterations,
@@ -790,7 +781,6 @@ export function AIConfigPage() {
     <ProvidersModelsTab
       temperature={base.temperature}
       maxIterations={base.maxIterations}
-      maxContextTokens={base.maxContextTokens}
       onBaseChange={(patch) => {
         setBase((prev) => ({ ...prev, ...patch }));
       }}
@@ -861,9 +851,16 @@ export function AIConfigPage() {
             <CardTitle>会话与冷却</CardTitle>
             <CardDescription>控制会话保留和群聊回复节奏</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
+          <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <NumberField
-              label="获取群聊上下文"
+              label="群聊历史消息数"
+              hint="每轮对话直接携带的群聊历史条数"
+              value={base.historyCount}
+              onChange={(value) => updateBase("historyCount", value)}
+            />
+            <NumberField
+              label="会话缓存上限"
+              hint="同时缓存的会话数量，超出后按最久未使用淘汰"
               value={settings.maxSessions}
               onChange={(value) => updateSettings("maxSessions", value)}
             />
@@ -993,7 +990,7 @@ export function AIConfigPage() {
               />
               <ToggleField
                 title="语音消息"
-                description="允许 AI 在合适场景下合成并发送语音消息"
+                description="允许 AI 合成并发送简短语音；接口地址、密钥与超时由 audio 服务配置页管理"
                 checked={settings.audio.enabled}
                 onChange={(checked) =>
                   setSettings((prev) => ({
@@ -1164,63 +1161,6 @@ export function AIConfigPage() {
               emptyLabel="当前没有注册 Tools"
               items={resources.tools}
             />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {mode === "tools" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>语音消息</CardTitle>
-            <CardDescription>
-              配置独立的 GPT-SoVITS TTS 接口。启用后，AI
-              可以在合适场景下发送简短语音。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
-            <Field label="TTS API 地址" hint="例如 http://127.0.0.1:9880">
-              <Input
-                value={settings.audio.baseUrl}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    audio: { ...prev.audio, baseUrl: e.target.value },
-                  }))
-                }
-                placeholder="http://127.0.0.1:9880"
-              />
-            </Field>
-            <Field
-              label="TTS API Key"
-              hint="对应 GPT-SoVITS 服务端的 X-API-Key"
-            >
-              <Input
-                type="password"
-                value={settings.audio.apiKey}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    audio: { ...prev.audio, apiKey: e.target.value },
-                  }))
-                }
-                placeholder="留空表示不校验"
-              />
-            </Field>
-            <Field label="TTS 超时 (秒)" hint="语音合成请求的超时时间">
-              <NumberInput
-                value={settings.audio.timeoutMs / 1000}
-                onValueChange={(value) => {
-                  if (value === null) return;
-                  setSettings((prev) => ({
-                    ...prev,
-                    audio: {
-                      ...prev.audio,
-                      timeoutMs: value * 1000,
-                    },
-                  }));
-                }}
-              />
-            </Field>
           </CardContent>
         </Card>
       ) : null}
@@ -1493,27 +1433,6 @@ export function AIConfigPage() {
 
   const renderCapabilityTab = (mode: "context" | "tools") => (
     <div className="space-y-4">
-      {mode === "context" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>当前对话上下文</CardTitle>
-            <CardDescription>控制每轮对话直接携带的历史范围</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <NumberField
-              label="上下文窗口"
-              value={base.maxContextTokens}
-              onChange={(value) => updateBase("maxContextTokens", value)}
-            />
-            <NumberField
-              label="群聊历史消息数"
-              value={base.historyCount}
-              onChange={(value) => updateBase("historyCount", value)}
-            />
-          </CardContent>
-        </Card>
-      ) : null}
-
       {mode === "context" ? (
         <Card>
           <CardHeader>
@@ -2029,6 +1948,7 @@ function ToggleField({
 
 function NumberField({
   label,
+  hint,
   value,
   onChange,
   step,
@@ -2036,6 +1956,7 @@ function NumberField({
   msToSec,
 }: {
   label: string;
+  hint?: string;
   value: number;
   onChange: (value: number) => void;
   step?: string;
@@ -2053,7 +1974,7 @@ function NumberField({
   };
 
   return (
-    <Field label={label}>
+    <Field label={label} hint={hint}>
       <NumberInput
         step={step}
         value={displayValue}
