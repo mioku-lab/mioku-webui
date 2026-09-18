@@ -4,6 +4,7 @@ import {
   LoaderCircle,
   Package,
   Plus,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import { apiFetch } from "@/lib/api";
 import { toast } from "@/lib/toast";
 
 type ViewMode = "overview" | "detail";
+type UpdateState = "up-to-date" | "has-updates" | "unknown" | "no-git";
 
 interface AdapterOverviewItem {
   name: string;
@@ -30,8 +32,12 @@ interface AdapterOverviewItem {
   description: string;
   hasGit: boolean;
   repository?: string;
+  updateState: UpdateState;
   hasUpdates: boolean;
   behind: number;
+  updateChecking?: boolean;
+  updateError?: string;
+  updateCheckedAt?: number;
 }
 
 interface AdapterDetail extends AdapterOverviewItem {
@@ -68,6 +74,7 @@ export function AdapterManagePage() {
   const [installInput, setInstallInput] = useState("");
   const [installing, setInstalling] = useState(false);
   const [installOutput, setInstallOutput] = useState("");
+  const [updatingName, setUpdatingName] = useState("");
   const navAnimSeedRef = useRef(0);
   const [navAnimSeed, setNavAnimSeed] = useState(0);
 
@@ -84,6 +91,37 @@ export function AdapterManagePage() {
       toast.error("加载适配器列表失败");
     } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const needPoll = adapters.some(
+      (item) =>
+        item.updateChecking ||
+        (item.updateState === "unknown" && !item.updateCheckedAt),
+    );
+    if (!needPoll) return;
+    const timer = setTimeout(() => {
+      loadOverview().then();
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [adapters]);
+
+  const updateAdapter = async (name: string) => {
+    setUpdatingName(name);
+    try {
+      await apiFetch("/api/manage/update", {
+        method: "POST",
+        body: JSON.stringify({ name, target: "adapter" }),
+      });
+      toast.success(`${name} 更新完成，请重启 Mioku`);
+      await loadOverview();
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        toast.error("更新失败");
+      }
+    } finally {
+      setUpdatingName("");
     }
   };
 
@@ -254,9 +292,18 @@ export function AdapterManagePage() {
                         <span className="text-xs text-muted-foreground">
                           v{adapter.version}
                         </span>
-                        {adapter.hasUpdates ? (
-                          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                            可更新
+                        {adapter.updateChecking ? (
+                          <Badge className="bg-sky-500/15 text-sky-700 dark:text-sky-300">
+                            <LoaderCircle className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            检查中
+                          </Badge>
+                        ) : adapter.hasUpdates ? (
+                          <Badge className="bg-orange-500/15 text-orange-700 dark:text-orange-300">
+                            有更新
+                          </Badge>
+                        ) : adapter.updateState === "up-to-date" ? (
+                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                            最新
                           </Badge>
                         ) : null}
                       </div>
@@ -277,6 +324,19 @@ export function AdapterManagePage() {
                           <ExternalLink className="h-4 w-4" />
                         </a>
                       ) : null}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="更新"
+                        onClick={() => updateAdapter(adapter.name).then()}
+                        disabled={updatingName === adapter.name}
+                      >
+                        {updatingName === adapter.name ? (
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

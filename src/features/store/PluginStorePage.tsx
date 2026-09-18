@@ -527,7 +527,7 @@ export function PluginStorePage() {
 
   const installFromUrl = async () => {
     if (!urlInput.trim()) {
-      toast.warning("请输入 Git 仓库地址");
+      toast.warning("请输入 npm 包名");
       return;
     }
     setInstalling(true);
@@ -607,7 +607,7 @@ export function PluginStorePage() {
 
   const installServiceFromCustomUrl = async () => {
     if (!servicePickerCustomUrl.trim()) {
-      toast.warning("请输入服务仓库地址");
+      toast.warning("请输入服务包名");
       return;
     }
 
@@ -676,7 +676,7 @@ export function PluginStorePage() {
             onClick={() => setUrlInstallOpen(true)}
             className={chipClass(false)}
           >
-            从 URL 安装
+            从包名安装
           </button>
         </span>
       </div>
@@ -845,7 +845,6 @@ export function PluginStorePage() {
                           installFromStore(item);
                         }}
                         disabled={
-                          (!item.repo && item.type === "plugin") ||
                           isInstalled(item.name, item.type) ||
                           installingKey === item.npm
                         }
@@ -993,7 +992,6 @@ export function PluginStorePage() {
                     <Button
                       onClick={() => installFromStore(detail)}
                       disabled={
-                        (!detail.repo && detail.type === "plugin") ||
                         isInstalled(detail.name, detail.type) ||
                         installingKey === detail.npm
                       }
@@ -1058,8 +1056,8 @@ export function PluginStorePage() {
 
       <Dialog
         open={urlInstallOpen}
-        title="从 URL 安装"
-        description="输入任意 Git 仓库地址，选择类型后安装"
+        title="从包名安装"
+        description="输入 npm 包名（如 mioku-plugin-xxx），选择类型后通过 bun 安装"
         onClose={() => {
           setUrlInstallOpen(false);
           setUrlInput("");
@@ -1096,7 +1094,7 @@ export function PluginStorePage() {
       >
         <div className="space-y-3">
           <Input
-            placeholder="https://github.com/owner/repo.git"
+            placeholder="mioku-plugin-xxx"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyDown={(e) => {
@@ -1171,7 +1169,7 @@ export function PluginStorePage() {
                         <p className="text-xs text-muted-foreground">
                           {hasOfficial
                             ? "可从官方源安装"
-                            : "需手动提供仓库地址"}
+                            : "需手动输入包名安装"}
                         </p>
                       </div>
                       {hasOfficial ? (
@@ -1197,7 +1195,7 @@ export function PluginStorePage() {
               <p className="text-sm font-medium">手动安装服务</p>
               <div className="flex gap-2">
                 <Input
-                  placeholder="https://github.com/owner/service-repo.git"
+                  placeholder="mioku-service-xxx"
                   value={servicePickerCustomUrl}
                   onChange={(e) => setServicePickerCustomUrl(e.target.value)}
                 />

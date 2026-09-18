@@ -34,13 +34,13 @@ import { useTopbar } from "@/components/layout/TopbarContext";
 type UsageRange = "today" | "7d" | "30d";
 
 type BotOption = {
-  botId: number;
+  botId: string;
   label: string;
 };
 
 type BotInfo = {
-  botId: number;
-  qq: number;
+  botId: string;
+  accountId: string;
   nickname: string;
   avatar: string;
   online: boolean;
@@ -50,7 +50,7 @@ type UsageSummary = {
   generatedAt: number;
   range: UsageRange;
   scope: "all" | "bot";
-  botId?: number;
+  botId?: string;
   bots: BotOption[];
   totals: {
     requests: number;
@@ -180,7 +180,7 @@ const flowColors = ["#14b8a6", "#38bdf8", "#a78bfa", "#f59e0b", "#f472b6"];
 
 export function AIUsagePage() {
   const [range, setRange] = useState<UsageRange>("today");
-  const [botId, setBotId] = useState<number | "all">("all");
+  const [botId, setBotId] = useState<string | "all">("all");
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [bots, setBots] = useState<BotInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -244,8 +244,8 @@ export function AIUsagePage() {
       bots.length > 0
         ? bots
         : (summary?.bots || []).map((bot) => ({
-            botId: bot.botId,
-            qq: bot.botId,
+            botId: String(bot.botId ?? ""),
+            accountId: String(bot.botId ?? ""),
             nickname: `Bot ${bot.label}`,
             avatar: "/miku-logo.png",
             online: true,
@@ -282,7 +282,7 @@ export function AIUsagePage() {
                     ? "border-primary/45 bg-card text-foreground shadow-sm"
                     : "border-border/70 bg-card/85 text-muted-foreground hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card hover:text-foreground"
                 }`}
-                title={`${bot.nickname} (${bot.qq})`}
+                title={`${bot.nickname} (账号ID ${bot.accountId})`}
               >
                 <span className="relative h-8 w-8 shrink-0">
                   <img

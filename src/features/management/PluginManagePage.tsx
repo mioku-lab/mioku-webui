@@ -252,9 +252,8 @@ export function PluginManagePage() {
   useEffect(() => {
     const needPoll = plugins.some(
       (item) =>
-        item.hasGit &&
-        (item.updateChecking ||
-          (item.updateState === "unknown" && !item.updateCheckedAt)),
+        item.updateChecking ||
+        (item.updateState === "unknown" && !item.updateCheckedAt),
     );
     if (!needPoll) return;
     const timer = setTimeout(() => {
@@ -455,13 +454,13 @@ export function PluginManagePage() {
 
   const installPlugin = async () => {
     if (!repoUrlInput.trim()) {
-      toast.warning("请输入插件 Git 地址");
+      toast.warning("请输入插件 npm 包名");
       return;
     }
 
     const ok = await confirm({
       title: "安装插件",
-      message: `确认从以下地址安装插件？\n${repoUrlInput.trim()}`,
+      message: `确认安装以下 npm 包？\n${repoUrlInput.trim()}`,
       confirmText: "安装",
       cancelText: "取消",
       variant: "danger",
@@ -469,7 +468,7 @@ export function PluginManagePage() {
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400">
           <p className="font-medium">提示</p>
           <p className="mt-1">
-            从 URL 安装的插件来自开发者社区，请确认来源可信
+            从 npm 安装的插件来自开发者社区，请确认来源可信
           </p>
         </div>
       ),
@@ -644,7 +643,6 @@ export function PluginManagePage() {
                           updatePlugin(plugin.name).then();
                         }}
                         disabled={
-                          !plugin.hasGit ||
                           updatingName === plugin.name ||
                           removingName === plugin.name
                         }
@@ -730,7 +728,7 @@ export function PluginManagePage() {
                     </Button>
                     <Button
                       onClick={() => updatePlugin(detail.name)}
-                      disabled={!detail.hasGit || updatingName === detail.name}
+                      disabled={updatingName === detail.name}
                     >
                       {updatingName === detail.name ? (
                         <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -756,28 +754,30 @@ export function PluginManagePage() {
                     </Button>
                   </div>
 
-                  <div className="space-y-2 border-l-2 border-border px-4 py-1">
-                    <p className="text-sm font-medium">仓库原地址</p>
-                    <div className="flex flex-col gap-2 md:flex-row">
-                      <Input
-                        value={repoEditInput}
-                        onChange={(event) =>
-                          setRepoEditInput(event.target.value)
-                        }
-                        placeholder="输入新的 Git 仓库地址"
-                      />
-                      <Button
-                        onClick={changeRepo}
-                        disabled={savingRepo || !detail.hasGit}
-                      >
-                        {savingRepo ? (
-                          <LoaderCircle className="h-4 w-4 animate-spin" />
-                        ) : (
-                          "保存地址"
-                        )}
-                      </Button>
+                  {detail.hasGit ? (
+                    <div className="space-y-2 border-l-2 border-border px-4 py-1">
+                      <p className="text-sm font-medium">仓库原地址</p>
+                      <div className="flex flex-col gap-2 md:flex-row">
+                        <Input
+                          value={repoEditInput}
+                          onChange={(event) =>
+                            setRepoEditInput(event.target.value)
+                          }
+                          placeholder="输入新的 Git 仓库地址"
+                        />
+                        <Button
+                          onClick={changeRepo}
+                          disabled={savingRepo || !detail.hasGit}
+                        >
+                          {savingRepo ? (
+                            <LoaderCircle className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "保存地址"
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
 
                   <div className="space-y-2">
                     <p className="text-sm font-medium">依赖服务</p>
@@ -867,7 +867,7 @@ export function PluginManagePage() {
       <Dialog
         open={installOpen}
         title="安装插件"
-        description="输入插件 Git 仓库地址，服务端会 clone 并安装依赖"
+        description="输入插件 npm 包名，服务端会通过 bun add 安装"
         onClose={closeInstall}
         footer={
           <>
@@ -889,7 +889,7 @@ export function PluginManagePage() {
       >
         <div className="space-y-3">
           <Input
-            placeholder="https://github.com/owner/repo.git"
+            placeholder="mioku-plugin-xxx"
             value={repoUrlInput}
             onChange={(event) => setRepoUrlInput(event.target.value)}
             onKeyDown={(e) => {
@@ -900,7 +900,7 @@ export function PluginManagePage() {
           {installing ? (
             <div className="flex items-center gap-2 border-l-2 border-primary px-4 py-2 text-sm">
               <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-              正在 clone 仓库并安装依赖，请稍候...
+              正在通过 bun add 安装，请稍候...
             </div>
           ) : null}
           {installOutput ? (

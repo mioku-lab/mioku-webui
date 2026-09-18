@@ -18,17 +18,25 @@ import {
 import { useTopbar } from "@/components/layout/TopbarContext";
 
 type BotInfo = {
-  botId: number;
-  qq: number;
+  botId: string;
+  accountId: string;
   nickname: string;
   avatar: string;
   online: boolean;
-  napcatVersion: string;
+  adapter: string;
+  adapterVersion: string;
+  implLabel: string;
+  framework: string;
+  appVersion: string;
+  protocolVersion: string;
+  platform: string;
+  platformVersion: string;
   groupCount: number;
   friendCount: number;
+  send: number;
+  receive: number;
   onlineDurationMs: number;
   statusText: string;
-  napcatApiBase: string;
   error?: string;
 };
 
@@ -42,7 +50,7 @@ export function DashboardPage() {
   const [overview, setOverview] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [selectedBotId, setSelectedBotId] = useState<number | null>(null);
+  const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
   const [networkSeries, setNetworkSeries] = useState<NetworkPoint[]>([]);
   const [saying, setSaying] = useState("愿每一次启动都带来新的灵感。");
   const [sayingLoading, setSayingLoading] = useState(false);
@@ -76,9 +84,11 @@ export function DashboardPage() {
       setOverview(res.data);
       appendNetworkPoint(res.data);
 
-      const firstBot = res.data?.bots?.[0];
-      if (firstBot && selectedBotId == null) {
-        setSelectedBotId(firstBot.botId);
+      const bots = res.data?.bots || [];
+      const firstRealBot =
+        bots.find((bot: any) => bot.adapter !== "stdin") || bots[0];
+      if (firstRealBot && selectedBotId == null) {
+        setSelectedBotId(firstRealBot.botId);
       }
       setError("");
     } catch (e) {
@@ -117,7 +127,11 @@ export function DashboardPage() {
 
   const bots: BotInfo[] = overview?.bots || [];
   const selectedBot = useMemo(
-    () => bots.find((bot) => bot.botId === selectedBotId) || bots[0] || null,
+    () =>
+      bots.find((bot) => bot.botId === selectedBotId) ||
+      bots.find((bot) => bot.adapter !== "stdin") ||
+      bots[0] ||
+      null,
     [selectedBotId],
   );
   const botNavSignature = bots.map((bot) => String(bot.botId)).join("|");
@@ -140,39 +154,37 @@ export function DashboardPage() {
                 className="topbar-nav-item-enter"
                 style={{ animationDelay: `${index * 45}ms` }}
               >
-              <button
-                type="button"
-                onClick={() => setSelectedBotId(bot.botId)}
-                className={`topbar-chip group flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs ${
-                  selectedBot?.botId === bot.botId
-                    ? "border-primary/45 bg-card text-foreground shadow-sm"
-                    : "border-border/70 bg-card/85 text-muted-foreground hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card hover:text-foreground"
-                }`}
-                title={`${bot.nickname} (${bot.qq})`}
-              >
-                <span className="relative h-8 w-8 shrink-0">
-                  <img
-                    src={bot.avatar}
-                    alt={bot.nickname}
-                    className="h-8 w-8 rounded-full object-cover"
-                  />
-                  <span
-                    className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-card ${
-                      bot.online ? "bg-green-500" : "bg-red-500"
-                    }`}
-                  />
-                </span>
-                <span className="max-w-[110px] truncate font-medium">
-                  {bot.nickname}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBotId(bot.botId)}
+                  className={`topbar-chip group flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs ${
+                    selectedBot?.botId === bot.botId
+                      ? "border-primary/45 bg-card text-foreground shadow-sm"
+                      : "border-border/70 bg-card/85 text-muted-foreground hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card hover:text-foreground"
+                  }`}
+                  title={`${bot.nickname} (账号ID ${bot.accountId})`}
+                >
+                  <span className="relative h-8 w-8 shrink-0">
+                    <img
+                      src={bot.avatar}
+                      alt={bot.nickname}
+                      className="h-8 w-8 rounded-full object-cover"
+                    />
+                    <span
+                      className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-card ${
+                        bot.online ? "bg-green-500" : "bg-red-500"
+                      }`}
+                    />
+                  </span>
+                  <span className="max-w-[110px] truncate font-medium">
+                    {bot.nickname}
+                  </span>
+                </button>
               </span>
             );
           })}
           {bots.length === 0 ? (
-            <span className="text-xs text-muted-foreground">
-              暂无实例
-            </span>
+            <span className="text-xs text-muted-foreground">暂无实例</span>
           ) : null}
         </div>
       </div>,
@@ -192,10 +204,10 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
             <Info label="Bot 昵称" value={selectedBot.nickname} />
-            <Info label="QQ 号" value={String(selectedBot.qq)} />
+            <Info label="账号ID" value={String(selectedBot.accountId)} />
             <Info
-              label="NapCat 版本"
-              value={selectedBot.napcatVersion || "unknown"}
+              label="版本"
+              value={selectedBot.implLabel || selectedBot.adapter || "unknown"}
             />
             <Info label="群数量" value={String(selectedBot.groupCount)} />
             <Info label="好友数量" value={String(selectedBot.friendCount)} />
@@ -243,10 +255,6 @@ export function DashboardPage() {
             <Info
               label="系统类型"
               value={`${system?.osPlatform || ""} / ${system?.osVersion || ""}`}
-            />
-            <Info
-              label="Mioki 版本"
-              value={`${versions?.mioki || "unknown"}`}
             />
             <Info
               label="Mioku 版本"
