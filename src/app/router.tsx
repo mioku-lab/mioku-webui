@@ -5,6 +5,7 @@ import {
   AboutPage,
   AdapterConfigPage,
   AdapterManagePage,
+  AgentSettingsPage,
   AIConfigPage,
   AIUsagePage,
   DashboardPage,
@@ -109,6 +110,14 @@ export const router = createBrowserRouter([
         element: (
           <LazyWrap>
             <AIConfigPage />
+          </LazyWrap>
+        ),
+      },
+      {
+        path: "agent",
+        element: (
+          <LazyWrap>
+            <AgentSettingsPage />
           </LazyWrap>
         ),
       },

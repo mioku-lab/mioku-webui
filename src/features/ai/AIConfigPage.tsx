@@ -50,6 +50,7 @@ type BaseConfig = {
   multimodalWorkingModel?: string;
   isMultimodal?: boolean;
   enableMediaRecognition: boolean;
+  ignorePrivateChat: boolean;
   temperature: number;
   historyCount: number;
   maxIterations: number;
@@ -180,6 +181,7 @@ const configTabs = [
 
 const emptyBaseConfig: BaseConfig = {
   enableMediaRecognition: true,
+  ignorePrivateChat: true,
   temperature: 0.8,
   historyCount: 100,
   maxIterations: 20,
@@ -578,6 +580,7 @@ export function AIConfigPage() {
         sanitizePersonalizationForSave(personalization);
       const basePayload = {
         enableMediaRecognition: base.enableMediaRecognition,
+        ignorePrivateChat: base.ignorePrivateChat,
         temperature: base.temperature,
         historyCount: base.historyCount,
         maxIterations: base.maxIterations,
@@ -1027,6 +1030,12 @@ export function AIConfigPage() {
                     dynamicDelay: { ...prev.dynamicDelay, enabled: checked },
                   }))
                 }
+              />
+              <ToggleField
+                title="忽略私聊"
+                description="开启后 chat 插件忽略所有私聊消息，私聊交给 agent 插件处理"
+                checked={base.ignorePrivateChat}
+                onChange={(checked) => updateBase("ignorePrivateChat", checked)}
               />
             </>
           ) : null}

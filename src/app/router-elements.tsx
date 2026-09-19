@@ -60,6 +60,11 @@ export const AIConfigPage = lazy(() =>
     default: m.AIConfigPage,
   })),
 );
+export const AgentSettingsPage = lazy(() =>
+  import("@/features/agent/AgentSettingsPage").then((m) => ({
+    default: m.AgentSettingsPage,
+  })),
+);
 export const AIUsagePage = lazy(() =>
   import("@/features/ai-usage/AIUsagePage").then((m) => ({
     default: m.AIUsagePage,
