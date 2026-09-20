@@ -119,12 +119,12 @@ const permissionOptions = [
   {
     value: "auto",
     label: "auto 自动",
-    hint: "文件与命令自动执行；每条命令先由工作模型审查，危险操作由用户审批",
+    hint: "文件与命令自动执行；每条命令先由工作模型审查，危险操作由用户审批。执行通知与审批请求即时推送",
   },
   {
     value: "full",
     label: "完全访问",
-    hint: "无沙箱，文件与命令直接执行，命令与用途会通知用户",
+    hint: "无沙箱，文件与命令直接执行；命令与文件改动在回复前合并成一条转发记录",
   },
   {
     value: "yolo",
@@ -530,7 +530,7 @@ function RuntimeTab({
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <ToggleField
             label="流式输出"
-            hint="按段落分条发送"
+            hint="按段落分条发送；full 模式因要先发操作记录，本轮不逐段推送"
             checked={settings.stream}
             onChange={(checked) => patch({ stream: checked })}
           />
