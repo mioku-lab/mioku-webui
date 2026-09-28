@@ -41,18 +41,18 @@ type CoreSystemConfig = {
 };
 
 type MiokuConfig = {
-  owners: number[];
-  admins: number[];
-  napcat: NapCatConfig[];
+  owners: string[];
+  admins: string[];
+  onebotInstances: OneBotInstanceConfig[];
   core: CoreSystemConfig;
 };
 
-type NapCatConfig = {
-  name: string;
+type OneBotInstanceConfig = {
   protocol: string;
-  port: number;
   host: string;
+  port: number;
   token: string;
+  reconnect: boolean;
 };
 
 type PluginStatusItem = {
@@ -62,7 +62,13 @@ type PluginStatusItem = {
   description: string;
 };
 
-type ConfigTab = "owners" | "admins" | "napcat" | "access" | "system" | "plugins";
+type ConfigTab =
+  | "owners"
+  | "admins"
+  | "onebot"
+  | "access"
+  | "system"
+  | "plugins";
 
 const emptyCoreConfig: CoreSystemConfig = {
   likeCommand: {
@@ -87,11 +93,36 @@ const emptyCoreConfig: CoreSystemConfig = {
 const tabLabels: Record<ConfigTab, string> = {
   owners: "主人配置",
   admins: "管理员配置",
-  napcat: "Onebot配置",
+  onebot: "Onebot配置",
   access: "访问控制",
   system: "系统功能",
   plugins: "插件管理",
 };
+
+const emptyOneBotInstance: OneBotInstanceConfig = {
+  protocol: "ws",
+  host: "localhost",
+  port: 3001,
+  token: "",
+  reconnect: true,
+};
+
+function normalizeOneBotInstances(
+  input?: Partial<OneBotInstanceConfig>[] | null,
+): OneBotInstanceConfig[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      ...emptyOneBotInstance,
+      ...item,
+      port:
+        typeof item.port === "number" && Number.isFinite(item.port)
+          ? item.port
+          : emptyOneBotInstance.port,
+      reconnect: item.reconnect !== false,
+    }));
+}
 
 function cloneConfig<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -101,7 +132,9 @@ function normalizeCoreConfig(
   input?: Partial<CoreSystemConfig> | null,
 ): CoreSystemConfig {
   const raw = input || {};
-  const validFreq = ["daily", "weekly", "monthly"].includes(raw.autoUpdate?.frequency || "");
+  const validFreq = ["daily", "weekly", "monthly"].includes(
+    raw.autoUpdate?.frequency || "",
+  );
   const merged: CoreSystemConfig = {
     likeCommand: {
       ...emptyCoreConfig.likeCommand,
@@ -122,7 +155,9 @@ function normalizeCoreConfig(
       ...emptyCoreConfig.autoUpdate,
       ...(raw.autoUpdate || {}),
       time: raw.autoUpdate?.time || emptyCoreConfig.autoUpdate.time,
-      frequency: validFreq ? raw.autoUpdate!.frequency : emptyCoreConfig.autoUpdate.frequency,
+      frequency: validFreq
+        ? raw.autoUpdate!.frequency
+        : emptyCoreConfig.autoUpdate.frequency,
     },
   };
   return merged;
@@ -132,7 +167,7 @@ export function MiokuConfigPage() {
   const [miokuConfig, setMiokuConfig] = useState<MiokuConfig>({
     owners: [],
     admins: [],
-    napcat: [],
+    onebotInstances: [],
     core: cloneConfig(emptyCoreConfig),
   });
   const [friendOptions, setFriendOptions] = useState<DatasourceOption[]>([]);
@@ -167,11 +202,18 @@ export function MiokuConfigPage() {
       const config = miokuRes.data || {
         owners: [],
         admins: [],
-        napcat: [],
+        onebotInstances: [],
         core: cloneConfig(emptyCoreConfig),
       };
       const normalizedConfig = {
         ...config,
+        owners: Array.isArray(config.owners)
+          ? config.owners.map((v: string | number) => String(v))
+          : [],
+        admins: Array.isArray(config.admins)
+          ? config.admins.map((v: string | number) => String(v))
+          : [],
+        onebotInstances: normalizeOneBotInstances(config.onebotInstances),
         core: normalizeCoreConfig(config.core),
       };
       setMiokuConfig(normalizedConfig);
@@ -260,7 +302,9 @@ export function MiokuConfigPage() {
   const loadPlugins = async () => {
     setLoadingPlugins(true);
     try {
-      const res = await apiFetch<{ data: PluginStatusItem[] }>("/api/config/plugins");
+      const res = await apiFetch<{ data: PluginStatusItem[] }>(
+        "/api/config/plugins",
+      );
       setPlugins(res.data || []);
     } catch {
       toast.error("加载插件列表失败");
@@ -295,7 +339,7 @@ export function MiokuConfigPage() {
   };
 
   const addOwner = () => {
-    setMiokuConfig((prev) => ({ ...prev, owners: [...prev.owners, 0] }));
+    setMiokuConfig((prev) => ({ ...prev, owners: [...prev.owners, ""] }));
   };
 
   const removeOwner = (index: number) => {
@@ -305,7 +349,7 @@ export function MiokuConfigPage() {
     }));
   };
 
-  const updateOwner = (index: number, value: number) => {
+  const updateOwner = (index: number, value: string) => {
     setMiokuConfig((prev) => ({
       ...prev,
       owners: prev.owners.map((o, i) => (i === index ? value : o)),
@@ -313,7 +357,7 @@ export function MiokuConfigPage() {
   };
 
   const addAdmin = () => {
-    setMiokuConfig((prev) => ({ ...prev, admins: [...prev.admins, 0] }));
+    setMiokuConfig((prev) => ({ ...prev, admins: [...prev.admins, ""] }));
   };
 
   const removeAdmin = (index: number) => {
@@ -323,38 +367,38 @@ export function MiokuConfigPage() {
     }));
   };
 
-  const updateAdmin = (index: number, value: number) => {
+  const updateAdmin = (index: number, value: string) => {
     setMiokuConfig((prev) => ({
       ...prev,
       admins: prev.admins.map((a, i) => (i === index ? value : a)),
     }));
   };
 
-  const addNapCat = () => {
+  const addOneBotInstance = () => {
     setMiokuConfig((prev) => ({
       ...prev,
-      napcat: [
-        ...prev.napcat,
-        { name: "", protocol: "ws", port: 3001, host: "localhost", token: "" },
+      onebotInstances: [
+        ...prev.onebotInstances,
+        cloneConfig(emptyOneBotInstance),
       ],
     }));
   };
 
-  const removeNapCat = (index: number) => {
+  const removeOneBotInstance = (index: number) => {
     setMiokuConfig((prev) => ({
       ...prev,
-      napcat: prev.napcat.filter((_, i) => i !== index),
+      onebotInstances: prev.onebotInstances.filter((_, i) => i !== index),
     }));
   };
 
-  const updateNapCat = (
+  const updateOneBotInstance = (
     index: number,
-    field: keyof NapCatConfig,
-    value: string | number,
+    field: keyof OneBotInstanceConfig,
+    value: string | number | boolean,
   ) => {
     setMiokuConfig((prev) => ({
       ...prev,
-      napcat: prev.napcat.map((n, i) =>
+      onebotInstances: prev.onebotInstances.map((n, i) =>
         i === index ? { ...n, [field]: value } : n,
       ),
     }));
@@ -386,13 +430,12 @@ export function MiokuConfigPage() {
             ) : (
               miokuConfig.owners.map((owner, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <NumberInput
-                    value={owner || null}
-                    onValueChange={(value) => {
-                      if (value !== null) updateOwner(index, value);
-                    }}
+                  <Input
+                    value={owner}
+                    onChange={(e) => updateOwner(index, e.target.value)}
                     placeholder="QQ 号"
-                    className="flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    inputMode="numeric"
+                    className="flex-1"
                   />
                   <Button
                     variant="ghost"
@@ -425,13 +468,12 @@ export function MiokuConfigPage() {
             ) : (
               miokuConfig.admins.map((admin, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <NumberInput
-                    value={admin || null}
-                    onValueChange={(value) => {
-                      if (value !== null) updateAdmin(index, value);
-                    }}
+                  <Input
+                    value={admin}
+                    onChange={(e) => updateAdmin(index, e.target.value)}
                     placeholder="QQ 号"
-                    className="flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    inputMode="numeric"
+                    className="flex-1"
                   />
                   <Button
                     variant="ghost"
@@ -448,50 +490,43 @@ export function MiokuConfigPage() {
         </Card>
       )}
 
-      {!loading && activeTab === "napcat" && (
+      {!loading && activeTab === "onebot" && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>NapCat/Onebot 实例配置</CardTitle>
-            <Button variant="outline" size="sm" onClick={addNapCat}>
+            <CardTitle>OneBot (NapCat) 连接实例</CardTitle>
+            <Button variant="outline" size="sm" onClick={addOneBotInstance}>
               <Plus className="h-4 w-4" />
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
-            {miokuConfig.napcat.length === 0 ? (
+            {miokuConfig.onebotInstances.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 暂无实例，点击右上角添加
               </p>
             ) : (
-              miokuConfig.napcat.map((napcat, index) => (
+              miokuConfig.onebotInstances.map((instance, index) => (
                 <div
                   key={index}
                   className="space-y-3 border-l-2 border-border px-4 py-1"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">
-                      {napcat.name || `实例 ${index + 1}`}
+                      {`实例 ${index + 1}`}
                     </span>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => removeNapCat(index)}
+                      onClick={() => removeOneBotInstance(index)}
                       className="text-red-500 hover:text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                    <Input
-                      value={napcat.name}
-                      onChange={(e) =>
-                        updateNapCat(index, "name", e.target.value)
-                      }
-                      placeholder="实例名称"
-                    />
                     <Select
-                      value={napcat.protocol}
+                      value={instance.protocol}
                       onValueChange={(value) =>
-                        updateNapCat(index, "protocol", value)
+                        updateOneBotInstance(index, "protocol", value)
                       }
                     >
                       <SelectTrigger className="w-full">
@@ -503,29 +538,46 @@ export function MiokuConfigPage() {
                       </SelectContent>
                     </Select>
                     <Input
-                      value={napcat.host}
+                      value={instance.host}
                       onChange={(e) =>
-                        updateNapCat(index, "host", e.target.value)
+                        updateOneBotInstance(index, "host", e.target.value)
                       }
                       placeholder="主机地址"
                     />
                     <NumberInput
-                      value={napcat.port}
+                      value={instance.port}
                       onValueChange={(value) => {
-                        if (value !== null) updateNapCat(index, "port", value);
+                        if (value !== null)
+                          updateOneBotInstance(index, "port", value);
                       }}
                       placeholder="端口"
                       className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <Input
                       type="password"
-                      value={napcat.token}
+                      value={instance.token}
                       onChange={(e) =>
-                        updateNapCat(index, "token", e.target.value)
+                        updateOneBotInstance(index, "token", e.target.value)
                       }
                       placeholder="Token"
-                      className="md:col-span-2"
                     />
+                    <label className="flex min-h-10 cursor-pointer items-center justify-between gap-4 md:col-span-2">
+                      <div className="space-y-1">
+                        <span className="text-sm font-medium">
+                          断线自动重连
+                        </span>
+                        <p className="text-sm text-muted-foreground">
+                          连接断开后是否自动重连
+                        </p>
+                      </div>
+                      <Switch
+                        checked={instance.reconnect}
+                        onCheckedChange={(checked) =>
+                          updateOneBotInstance(index, "reconnect", checked)
+                        }
+                        className="shrink-0"
+                      />
+                    </label>
                   </div>
                 </div>
               ))
@@ -558,7 +610,9 @@ export function MiokuConfigPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="text-sm font-medium">{plugin.name}</span>
+                        <span className="text-sm font-medium">
+                          {plugin.name}
+                        </span>
                       </div>
                       {plugin.description && (
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -773,7 +827,10 @@ export function MiokuConfigPage() {
                     onChange={(event) =>
                       updateCoreConfig((core) => ({
                         ...core,
-                        autoUpdate: { ...core.autoUpdate, time: event.target.value },
+                        autoUpdate: {
+                          ...core.autoUpdate,
+                          time: event.target.value,
+                        },
                       }))
                     }
                   />
