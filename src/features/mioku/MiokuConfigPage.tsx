@@ -43,16 +43,7 @@ type CoreSystemConfig = {
 type MiokuConfig = {
   owners: string[];
   admins: string[];
-  onebotInstances: OneBotInstanceConfig[];
   core: CoreSystemConfig;
-};
-
-type OneBotInstanceConfig = {
-  protocol: string;
-  host: string;
-  port: number;
-  token: string;
-  reconnect: boolean;
 };
 
 type PluginStatusItem = {
@@ -65,7 +56,6 @@ type PluginStatusItem = {
 type ConfigTab =
   | "owners"
   | "admins"
-  | "onebot"
   | "access"
   | "system"
   | "plugins";
@@ -93,36 +83,10 @@ const emptyCoreConfig: CoreSystemConfig = {
 const tabLabels: Record<ConfigTab, string> = {
   owners: "主人配置",
   admins: "管理员配置",
-  onebot: "Onebot配置",
   access: "访问控制",
   system: "系统功能",
   plugins: "插件管理",
 };
-
-const emptyOneBotInstance: OneBotInstanceConfig = {
-  protocol: "ws",
-  host: "localhost",
-  port: 3001,
-  token: "",
-  reconnect: true,
-};
-
-function normalizeOneBotInstances(
-  input?: Partial<OneBotInstanceConfig>[] | null,
-): OneBotInstanceConfig[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .filter((item) => item && typeof item === "object")
-    .map((item) => ({
-      ...emptyOneBotInstance,
-      ...item,
-      port:
-        typeof item.port === "number" && Number.isFinite(item.port)
-          ? item.port
-          : emptyOneBotInstance.port,
-      reconnect: item.reconnect !== false,
-    }));
-}
 
 function cloneConfig<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -167,7 +131,6 @@ export function MiokuConfigPage() {
   const [miokuConfig, setMiokuConfig] = useState<MiokuConfig>({
     owners: [],
     admins: [],
-    onebotInstances: [],
     core: cloneConfig(emptyCoreConfig),
   });
   const [friendOptions, setFriendOptions] = useState<DatasourceOption[]>([]);
@@ -202,7 +165,6 @@ export function MiokuConfigPage() {
       const config = miokuRes.data || {
         owners: [],
         admins: [],
-        onebotInstances: [],
         core: cloneConfig(emptyCoreConfig),
       };
       const normalizedConfig = {
@@ -213,7 +175,6 @@ export function MiokuConfigPage() {
         admins: Array.isArray(config.admins)
           ? config.admins.map((v: string | number) => String(v))
           : [],
-        onebotInstances: normalizeOneBotInstances(config.onebotInstances),
         core: normalizeCoreConfig(config.core),
       };
       setMiokuConfig(normalizedConfig);
@@ -374,36 +335,6 @@ export function MiokuConfigPage() {
     }));
   };
 
-  const addOneBotInstance = () => {
-    setMiokuConfig((prev) => ({
-      ...prev,
-      onebotInstances: [
-        ...prev.onebotInstances,
-        cloneConfig(emptyOneBotInstance),
-      ],
-    }));
-  };
-
-  const removeOneBotInstance = (index: number) => {
-    setMiokuConfig((prev) => ({
-      ...prev,
-      onebotInstances: prev.onebotInstances.filter((_, i) => i !== index),
-    }));
-  };
-
-  const updateOneBotInstance = (
-    index: number,
-    field: keyof OneBotInstanceConfig,
-    value: string | number | boolean,
-  ) => {
-    setMiokuConfig((prev) => ({
-      ...prev,
-      onebotInstances: prev.onebotInstances.map((n, i) =>
-        i === index ? { ...n, [field]: value } : n,
-      ),
-    }));
-  };
-
   return (
     <div className="space-y-4 animate-soft-pop">
       {loading ? (
@@ -483,102 +414,6 @@ export function MiokuConfigPage() {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {!loading && activeTab === "onebot" && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>OneBot (NapCat) 连接实例</CardTitle>
-            <Button variant="outline" size="sm" onClick={addOneBotInstance}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {miokuConfig.onebotInstances.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                暂无实例，点击右上角添加
-              </p>
-            ) : (
-              miokuConfig.onebotInstances.map((instance, index) => (
-                <div
-                  key={index}
-                  className="space-y-3 border-l-2 border-border px-4 py-1"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">
-                      {`实例 ${index + 1}`}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeOneBotInstance(index)}
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                    <Select
-                      value={instance.protocol}
-                      onValueChange={(value) =>
-                        updateOneBotInstance(index, "protocol", value)
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="选择协议" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ws">ws</SelectItem>
-                        <SelectItem value="wss">wss</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      value={instance.host}
-                      onChange={(e) =>
-                        updateOneBotInstance(index, "host", e.target.value)
-                      }
-                      placeholder="主机地址"
-                    />
-                    <NumberInput
-                      value={instance.port}
-                      onValueChange={(value) => {
-                        if (value !== null)
-                          updateOneBotInstance(index, "port", value);
-                      }}
-                      placeholder="端口"
-                      className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                    <Input
-                      type="password"
-                      value={instance.token}
-                      onChange={(e) =>
-                        updateOneBotInstance(index, "token", e.target.value)
-                      }
-                      placeholder="Token"
-                    />
-                    <label className="flex min-h-10 cursor-pointer items-center justify-between gap-4 md:col-span-2">
-                      <div className="space-y-1">
-                        <span className="text-sm font-medium">
-                          断线自动重连
-                        </span>
-                        <p className="text-sm text-muted-foreground">
-                          连接断开后是否自动重连
-                        </p>
-                      </div>
-                      <Switch
-                        checked={instance.reconnect}
-                        onCheckedChange={(checked) =>
-                          updateOneBotInstance(index, "reconnect", checked)
-                        }
-                        className="shrink-0"
-                      />
-                    </label>
-                  </div>
                 </div>
               ))
             )}
