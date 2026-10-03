@@ -42,6 +42,8 @@ interface OfficialRegistry {
   plugins: Record<string, OfficialEntry>;
   services: Record<string, OfficialEntry>;
   adapters: Record<string, OfficialEntry>;
+  /** 市场隐藏名单：各类别下的包短名，不在市场展示 */
+  hidden?: Partial<Record<"plugins" | "services" | "adapters", string[]>>;
 }
 
 interface NpmSearchObject {
@@ -119,6 +121,19 @@ function normalizeKeywords(keywords: unknown): string[] {
 
 function extractTags(keywords: string[]): string[] {
   return keywords.filter((k) => k !== "mioku");
+}
+
+/** 官方注册表 hidden 名单：按类别收集需要隐藏的包短名 */
+function hiddenShortNames(registry: OfficialRegistry): Record<
+  "plugin" | "service" | "adapter",
+  Set<string>
+> {
+  const empty = new Set<string>();
+  return {
+    plugin: new Set(registry.hidden?.plugins ?? empty),
+    service: new Set(registry.hidden?.services ?? empty),
+    adapter: new Set(registry.hidden?.adapters ?? empty),
+  };
 }
 
 function toBrowserRepoUrl(raw: string): string {
@@ -276,6 +291,7 @@ export function PluginStorePage() {
       const officialPlugins = registry.plugins || {};
       const officialServices = registry.services || {};
       const officialAdapters = registry.adapters || {};
+      const hidden = hiddenShortNames(registry);
       const seen = new Map<string, StoreItem>();
 
       for (const obj of npmResults) {
@@ -286,6 +302,8 @@ export function PluginStorePage() {
 
         const type = inferType(npm);
         if (!type) continue;
+
+        if (hidden[type].has(stripPrefix(npm, type))) continue;
 
         const keywords = normalizeKeywords(pkg.keywords);
         if (!keywords.includes("mioku")) continue;
@@ -328,6 +346,7 @@ export function PluginStorePage() {
       ) => {
         for (const [key, entry] of Object.entries(entries)) {
           if (!entry.builtin) continue;
+          if (hidden[type].has(key)) continue;
           const npm = `mioku-${type === "plugin" ? "plugin" : "service"}-${key}`;
           if (seen.has(npm)) {
             const existing = seen.get(npm)!;
