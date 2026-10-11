@@ -7,6 +7,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,6 @@ interface StoreItem {
   description: string;
   version: string;
   keywords: string[];
-  tags: string[];
   official: boolean;
   builtin: boolean;
   repo: string;
@@ -119,8 +119,9 @@ function normalizeKeywords(keywords: unknown): string[] {
   return keywords.map((k) => String(k));
 }
 
-function extractTags(keywords: string[]): string[] {
-  return keywords.filter((k) => k !== "mioku");
+/** 市场里统一使用的中文类型名 */
+function typeLabelOf(type: StoreItem["type"]): string {
+  return type === "plugin" ? "插件" : type === "service" ? "服务" : "适配器";
 }
 
 /** 官方注册表 hidden 名单：按类别收集需要隐藏的包短名 */
@@ -151,10 +152,6 @@ function toBrowserRepoUrl(raw: string): string {
       .replace(/\.git$/, "");
   }
   return value.replace(/^git\+/, "").replace(/\.git$/, "");
-}
-
-function formatTag(tag: string): string {
-  return tag.replace(/^mioku-/, "");
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -198,10 +195,6 @@ async function fetchNpmPackage(name: string): Promise<any> {
   return fetchJson<any>(`${NPM_PACKAGE_URL}/${encodeURIComponent(name)}`);
 }
 
-function uniqueStrings(values: string[]): string[] {
-  return Array.from(new Set(values.filter(Boolean)));
-}
-
 export function PluginStorePage() {
   const { setLeftContent, setRightContent } = useTopbar();
 
@@ -217,7 +210,6 @@ export function PluginStorePage() {
   const [mode, setMode] = useState<StoreViewMode>("list");
   const [activeType, setActiveType] = useState<StoreType>("all");
   const [searchInput, setSearchInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [allItems, setAllItems] = useState<StoreItem[]>([]);
   const [loadingList, setLoadingList] = useState(false);
@@ -321,7 +313,6 @@ export function PluginStorePage() {
           description: String(pkg.description || "").trim(),
           version: String(pkg.version || "").trim(),
           keywords,
-          tags: extractTags(keywords),
           official: Boolean(entry),
           builtin: Boolean(entry?.builtin),
           repo: toBrowserRepoUrl(
@@ -363,7 +354,6 @@ export function PluginStorePage() {
                 : "",
               version: pkgJson ? String(pkgJson.version || "").trim() : "",
               keywords: ["mioku"],
-              tags: [],
               official: true,
               builtin: true,
               repo: `https://github.com/mioku-lab/mioku/tree/main/${
@@ -429,6 +419,8 @@ export function PluginStorePage() {
     }
   }, [mode]);
 
+  const query = searchInput.trim();
+
   const filteredItems = useMemo(() => {
     let list = [...allItems];
 
@@ -436,8 +428,8 @@ export function PluginStorePage() {
       list = list.filter((item) => item.type === activeType);
     }
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (query) {
+      const q = query.toLowerCase();
       list = list.filter(
         (item) =>
           item.name.toLowerCase().includes(q) ||
@@ -448,7 +440,11 @@ export function PluginStorePage() {
     }
 
     return list;
-  }, [allItems, activeType, searchQuery]);
+  }, [allItems, activeType, query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, activeType]);
 
   const pagedItems = useMemo(() => {
     const offset = (page - 1) * PAGE_SIZE;
@@ -457,12 +453,6 @@ export function PluginStorePage() {
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const hasMore = page < totalPages;
-
-  const availableTags = useMemo(() => {
-    return uniqueStrings(
-      filteredItems.flatMap((item) => item.tags || []),
-    ).slice(0, 12);
-  }, [filteredItems]);
 
   const isInstalled = (name: string, type: "plugin" | "service" | "adapter"): boolean => {
     if (type === "plugin") return installedPlugins.some((p) => p.name === name);
@@ -478,7 +468,7 @@ export function PluginStorePage() {
       return;
     }
 
-    const typeLabel = item.type === "plugin" ? "插件" : item.type === "service" ? "服务" : "适配器";
+    const typeLabel = typeLabelOf(item.type);
     const ok = await confirm({
       title: item.official ? `安装${typeLabel}` : `安装社区${typeLabel}`,
       message: `确认安装 ${item.name}${item.version ? ` v${item.version}` : ""}？`,
@@ -737,50 +727,23 @@ export function PluginStorePage() {
 
   return (
     <div className="space-y-4 animate-soft-pop">
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="搜索 npm 包、描述或标签..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setSearchQuery(searchInput.trim());
-                setPage(1);
-              }
-            }}
-            className="pl-9 pr-24"
-          />
-          <Button
-            size="sm"
-            className="absolute right-1.5 top-1/2 h-8 -translate-y-1/2"
-            onClick={() => {
-              setSearchQuery(searchInput.trim());
-              setPage(1);
-            }}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="搜索 npm 包或描述..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="pl-9 pr-10"
+        />
+        {searchInput && (
+          <button
+            type="button"
+            aria-label="清除搜索"
+            onClick={() => setSearchInput("")}
+            className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
           >
-            搜索
-          </Button>
-        </div>
-
-        {availableTags.length > 0 && mode === "list" && (
-          <div className="flex flex-wrap gap-2">
-            {availableTags.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => {
-                  setSearchInput(tag);
-                  setSearchQuery(tag);
-                  setPage(1);
-                }}
-                className="rounded-full border bg-secondary/40 px-3 py-1 text-xs text-muted-foreground transition hover:text-foreground"
-              >
-                #{formatTag(tag)}
-              </button>
-            ))}
-          </div>
+            <X className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
 
@@ -798,7 +761,7 @@ export function PluginStorePage() {
             </CardTitle>
             <CardDescription>
               共 {filteredItems.length} 个结果
-              {searchQuery ? ` · 搜索：${searchQuery}` : ""}
+              {query ? ` · 搜索：${query}` : ""}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -820,11 +783,7 @@ export function PluginStorePage() {
                           {item.name}
                         </p>
                         <Badge className="bg-secondary">
-                          {item.type === "plugin"
-                            ? "插件"
-                            : item.type === "service"
-                              ? "服务"
-                              : "适配器"}
+                          {typeLabelOf(item.type)}
                         </Badge>
                         {item.builtin ? (
                           <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-300">
@@ -839,17 +798,9 @@ export function PluginStorePage() {
                             社区
                           </Badge>
                         )}
-                        {item.version && <Badge>{item.version}</Badge>}
-                        {item.tags.slice(0, 3).map((tag) => (
-                          <Badge
-                            key={tag}
-                            className="bg-secondary/60 text-muted-foreground"
-                          >
-                            #{formatTag(tag)}
-                          </Badge>
-                        ))}
+                        {item.version && <Badge>v{item.version}</Badge>}
                       </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                         {item.description || "暂无描述"}
                       </p>
                       <p className="mt-1 truncate text-[11px] text-muted-foreground/80">
@@ -885,9 +836,21 @@ export function PluginStorePage() {
               ))}
 
               {!loadingList && pagedItems.length === 0 && (
-                <p className="col-span-2 text-sm text-muted-foreground">
-                  {searchQuery ? "没有匹配的结果" : "暂无可用包"}
-                </p>
+                <div className="col-span-2 flex flex-col items-center gap-3 py-8 text-sm text-muted-foreground">
+                  <p>{query ? `没有匹配「${query}」的结果` : "暂无可用包"}</p>
+                  {(query || activeType !== "all") && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSearchInput("");
+                        setActiveType("all");
+                      }}
+                    >
+                      清除筛选
+                    </Button>
+                  )}
+                </div>
               )}
 
               {loadingList && (
@@ -947,11 +910,7 @@ export function PluginStorePage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <CardTitle>{detail.name}</CardTitle>
                     <Badge className="bg-secondary">
-                      {detail.type === "plugin"
-                        ? "插件"
-                        : detail.type === "service"
-                          ? "服务"
-                          : "适配器"}
+                      {typeLabelOf(detail.type)}
                     </Badge>
                     {detail.builtin ? (
                       <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-300">
@@ -966,15 +925,7 @@ export function PluginStorePage() {
                         社区
                       </Badge>
                     )}
-                    {detail.version && <Badge>{detail.version}</Badge>}
-                    {detail.tags.slice(0, 5).map((tag) => (
-                      <Badge
-                        key={tag}
-                        className="bg-secondary/60 text-muted-foreground"
-                      >
-                        #{formatTag(tag)}
-                      </Badge>
-                    ))}
+                    {detail.version && <Badge>v{detail.version}</Badge>}
                   </div>
                   <CardDescription>
                     {detail.description || "暂无描述"}
