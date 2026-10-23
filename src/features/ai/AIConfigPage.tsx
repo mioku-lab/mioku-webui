@@ -124,21 +124,18 @@ type PersonalizationConfig = {
     multipleStyles: string[];
     multipleProbability: number;
   };
-  memory: {
-    enabled: boolean;
-    groupHistoryLimit: number;
-    userHistoryLimit: number;
-  };
   topic: {
     enabled: boolean;
     windowHours: number;
     historyWindowCount: number;
   };
-  planner: {
+  groupEvents: {
     enabled: boolean;
-    idleThresholdMs: number;
-    idleMessageCount: number;
-    idleCheckBotIds: string[];
+    indexWindowMinutes: number;
+    detailWindowMinutes: number;
+    detailMaxItems: number;
+    detailBudgetChars: number;
+    pokeWindowMinutes: number;
   };
   emoji: {
     enabled: boolean;
@@ -147,7 +144,7 @@ type PersonalizationConfig = {
   };
   expression: {
     enabled: boolean;
-    learnAfterMessages: number;
+    lookbackMessages: number;
     sampleSize: number;
   };
 };
@@ -259,21 +256,18 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
     multipleStyles: [],
     multipleProbability: 0.2,
   },
-  memory: {
-    enabled: true,
-    groupHistoryLimit: 300,
-    userHistoryLimit: 100,
-  },
   topic: {
     enabled: true,
     windowHours: 5,
     historyWindowCount: 3,
   },
-  planner: {
+  groupEvents: {
     enabled: true,
-    idleThresholdMs: 1800000,
-    idleMessageCount: 100,
-    idleCheckBotIds: [],
+    indexWindowMinutes: 30,
+    detailWindowMinutes: 8,
+    detailMaxItems: 18,
+    detailBudgetChars: 700,
+    pokeWindowMinutes: 10,
   },
   emoji: {
     enabled: false,
@@ -282,8 +276,8 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
   },
   expression: {
     enabled: true,
-    learnAfterMessages: 100,
-    sampleSize: 8,
+    lookbackMessages: 100,
+    sampleSize: 6,
   },
 };
 
@@ -380,12 +374,6 @@ function sanitizePersonalizationForSave(
         personalization.replyStyle.multipleStyles,
       ),
     },
-    planner: {
-      ...personalization.planner,
-      idleCheckBotIds: compactLineArray(
-        personalization.planner.idleCheckBotIds,
-      ),
-    },
     emoji: {
       ...personalization.emoji,
       characters: compactLineArray(personalization.emoji.characters),
@@ -439,7 +427,9 @@ export function AIConfigPage() {
         apiFetch<{ data: BaseConfig }>("/api/ai/base"),
         apiFetch<{ data: PersonalizationConfig }>("/api/ai/personalization"),
         apiFetch<{ data: SettingsConfig }>("/api/ai/settings"),
-        apiFetch<{ data: Array<string | { name: string }> }>("/api/ai/instances"),
+        apiFetch<{ data: Array<string | { name: string }> }>(
+          "/api/ai/instances",
+        ),
         apiFetch<{ data: { skills: string[]; tools: string[] } }>(
           "/api/ai/skills",
         ),
@@ -455,8 +445,7 @@ export function AIConfigPage() {
       const rawExpression = (personalizationRes.data?.expression || {}) as {
         enabled?: boolean;
         sampleSize?: number;
-        learnAfterMessages?: number;
-        maxExpressions?: number;
+        lookbackMessages?: number;
       };
       const nextPersonalization = {
         ...emptyPersonalizationConfig,
@@ -474,17 +463,13 @@ export function AIConfigPage() {
             personalizationRes.data?.replyStyle?.baseStyle || "",
           ),
         },
-        memory: {
-          ...emptyPersonalizationConfig.memory,
-          ...(personalizationRes.data?.memory || {}),
-        },
         topic: {
           ...emptyPersonalizationConfig.topic,
           ...(personalizationRes.data?.topic || {}),
         },
-        planner: {
-          ...emptyPersonalizationConfig.planner,
-          ...(personalizationRes.data?.planner || {}),
+        groupEvents: {
+          ...emptyPersonalizationConfig.groupEvents,
+          ...((personalizationRes.data as any)?.groupEvents || {}),
         },
         emoji: {
           ...emptyPersonalizationConfig.emoji,
@@ -497,10 +482,9 @@ export function AIConfigPage() {
         expression: {
           ...emptyPersonalizationConfig.expression,
           ...rawExpression,
-          learnAfterMessages:
-            rawExpression.learnAfterMessages ??
-            rawExpression.maxExpressions ??
-            emptyPersonalizationConfig.expression.learnAfterMessages,
+          lookbackMessages:
+            rawExpression.lookbackMessages ??
+            emptyPersonalizationConfig.expression.lookbackMessages,
         },
       };
       const nextSettings = {
@@ -1445,44 +1429,13 @@ export function AIConfigPage() {
       {mode === "context" ? (
         <Card>
           <CardHeader>
-            <CardTitle>记忆与话题</CardTitle>
+            <CardTitle>话题与群事件</CardTitle>
             <CardDescription>
-              这些能力决定 bot 是否会记住上下文、提炼话题，并在群冷场时主动说话
+              话题摘要提供「可见历史之外」的背景参考；群事件感知观察撤回、进退群、
+              拍一拍，常驻一行薄索引，被点名时才展开明细
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <CapabilityCard
-              title="Memory"
-              description="主模型按需调用回忆工具，工作模型检索历史记录"
-              enabled={personalization.memory.enabled}
-              onEnabledChange={(checked) =>
-                setPersonalization((prev) => ({
-                  ...prev,
-                  memory: { ...prev.memory, enabled: checked },
-                }))
-              }
-            >
-              <NumberField
-                label="群聊回忆条数"
-                value={personalization.memory.groupHistoryLimit}
-                onChange={(value) =>
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    memory: { ...prev.memory, groupHistoryLimit: value },
-                  }))
-                }
-              />
-              <NumberField
-                label="用户历史条数"
-                value={personalization.memory.userHistoryLimit}
-                onChange={(value) =>
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    memory: { ...prev.memory, userHistoryLimit: value },
-                  }))
-                }
-              />
-            </CapabilityCard>
             <CapabilityCard
               title="Topic"
               description="按固定时间窗口归纳群友历史话题，作为当前可见历史之外的背景参考"
@@ -1516,55 +1469,81 @@ export function AIConfigPage() {
               />
             </CapabilityCard>
             <CapabilityCard
-              title="Planner"
-              description="在群聊冷场时判断是否主动插话"
-              enabled={personalization.planner.enabled}
+              title="群事件感知"
+              description="观察撤回、进退群、拍一拍，按需注入上下文"
+              enabled={personalization.groupEvents.enabled}
               onEnabledChange={(checked) =>
                 setPersonalization((prev) => ({
                   ...prev,
-                  planner: { ...prev.planner, enabled: checked },
+                  groupEvents: { ...prev.groupEvents, enabled: checked },
                 }))
               }
             >
               <NumberField
-                label="空闲阈值 (分钟)"
-                value={personalization.planner.idleThresholdMs}
-                msToMin={true}
+                label="索引统计窗口 (分钟)"
+                value={personalization.groupEvents.indexWindowMinutes}
                 onChange={(value) =>
                   setPersonalization((prev) => ({
                     ...prev,
-                    planner: { ...prev.planner, idleThresholdMs: value },
+                    groupEvents: {
+                      ...prev.groupEvents,
+                      indexWindowMinutes: value,
+                    },
                   }))
                 }
               />
               <NumberField
-                label="最少消息数"
-                value={personalization.planner.idleMessageCount}
+                label="明细窗口 (分钟)"
+                value={personalization.groupEvents.detailWindowMinutes}
                 onChange={(value) =>
                   setPersonalization((prev) => ({
                     ...prev,
-                    planner: { ...prev.planner, idleMessageCount: value },
+                    groupEvents: {
+                      ...prev.groupEvents,
+                      detailWindowMinutes: value,
+                    },
                   }))
                 }
               />
-              <Field
-                label="空闲检查 bot ID"
-                hint="每行一个；留空时使用全部 bot"
-              >
-                <Textarea
-                  className="min-h-24"
-                  value={arrayToLines(personalization.planner.idleCheckBotIds)}
-                  onChange={(e) =>
-                    setPersonalization((prev) => ({
-                      ...prev,
-                      planner: {
-                        ...prev.planner,
-                        idleCheckBotIds: linesToArray(e.target.value),
-                      },
-                    }))
-                  }
-                />
-              </Field>
+              <NumberField
+                label="明细最多条数"
+                value={personalization.groupEvents.detailMaxItems}
+                onChange={(value) =>
+                  setPersonalization((prev) => ({
+                    ...prev,
+                    groupEvents: {
+                      ...prev.groupEvents,
+                      detailMaxItems: value,
+                    },
+                  }))
+                }
+              />
+              <NumberField
+                label="明细字符预算"
+                value={personalization.groupEvents.detailBudgetChars}
+                onChange={(value) =>
+                  setPersonalization((prev) => ({
+                    ...prev,
+                    groupEvents: {
+                      ...prev.groupEvents,
+                      detailBudgetChars: value,
+                    },
+                  }))
+                }
+              />
+              <NumberField
+                label="拍一拍告知窗口 (分钟)"
+                value={personalization.groupEvents.pokeWindowMinutes}
+                onChange={(value) =>
+                  setPersonalization((prev) => ({
+                    ...prev,
+                    groupEvents: {
+                      ...prev.groupEvents,
+                      pokeWindowMinutes: value,
+                    },
+                  }))
+                }
+              />
             </CapabilityCard>
           </CardContent>
         </Card>
@@ -1573,13 +1552,15 @@ export function AIConfigPage() {
       {mode === "context" ? (
         <Card>
           <CardHeader>
-            <CardTitle>表达学习</CardTitle>
-            <CardDescription>按用户积累表达习惯并注入当前回复</CardDescription>
+            <CardTitle>表达样本</CardTitle>
+            <CardDescription>
+              主对话被触发时，直接拉该用户最近的真人原话当风格样本
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <CapabilityCard
               title="Expression"
-              description="按用户学习表达习惯，在该用户触发对话时注入供回复参考"
+              description="把该用户最近说过的原话抽几条注入，只学长度和语气，不学内容"
               enabled={personalization.expression.enabled}
               onEnabledChange={(checked) =>
                 setPersonalization((prev) => ({
@@ -1589,14 +1570,14 @@ export function AIConfigPage() {
               }
             >
               <NumberField
-                label="单用户触发阈值（消息数）"
-                value={personalization.expression.learnAfterMessages}
+                label="回看消息条数"
+                value={personalization.expression.lookbackMessages}
                 onChange={(value) =>
                   setPersonalization((prev) => ({
                     ...prev,
                     expression: {
                       ...prev.expression,
-                      learnAfterMessages: value,
+                      lookbackMessages: value,
                     },
                   }))
                 }

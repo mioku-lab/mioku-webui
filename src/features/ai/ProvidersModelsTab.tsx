@@ -91,7 +91,7 @@ const ROLE_META: Array<{
   hint: string;
 }> = [
   { role: "main", title: "主模型", hint: "正式回复，智商优先" },
-  { role: "working", title: "工作模型", hint: "planner 等轻量任务，速度优先" },
+  { role: "working", title: "工作模型", hint: "话题摘要、情绪判定、网页正文压缩等轻量任务，速度优先" },
   { role: "vision", title: "视觉模型", hint: "图片/视频描述，成本优先" },
 ];
 
