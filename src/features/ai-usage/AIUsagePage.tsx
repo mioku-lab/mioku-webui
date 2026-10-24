@@ -419,7 +419,7 @@ export function AIUsagePage() {
                 className="h-9 w-full rounded-full"
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
-                {loading ? "在刷新了:(" : "刷新"}
+                {loading ? "刷新中..." : "刷新"}
               </Button>
             </div>
           </div>
@@ -462,7 +462,7 @@ export function AIUsagePage() {
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <InsightPanel
           title="群使用排行"
-          description="看看哪个群用的最厉害"
+          description="按群统计 token 消耗量"
           onClick={() => summary && setDialog(groupDialog(summary))}
         >
           <ResponsiveContainer width="100%" height={280}>
@@ -499,7 +499,7 @@ export function AIUsagePage() {
 
         <InsightPanel
           title="工具使用排行"
-          description="看看哪个工具用的最多"
+          description="按工具统计调用次数"
           onClick={() => summary && setDialog(toolDialog(summary))}
         >
           <ResponsiveContainer width="100%" height={280}>
@@ -537,7 +537,7 @@ export function AIUsagePage() {
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <InsightPanel
           title="Token 流向"
-          description="我的Token都去哪了"
+          description="token 按输入、输出与缓存的分布"
           onClick={() => summary && setDialog(tokenFlowDialog(summary))}
         >
           <ResponsiveContainer width="100%" height={260}>
@@ -567,7 +567,7 @@ export function AIUsagePage() {
 
         <InsightPanel
           title="使用分类"
-          description="我的Token都去哪了"
+          description="token 按上下文构成分类的分布"
           onClick={() => summary && setDialog(categoryDialog(summary))}
         >
           <ResponsiveContainer width="100%" height={260}>
@@ -598,7 +598,7 @@ export function AIUsagePage() {
 
       <InsightPanel
         title="按时间查看活动"
-        description="要越用越多了吗"
+        description="按时间统计请求量"
         onClick={() => summary && setDialog(activityDialog(summary))}
       >
         <ResponsiveContainer width="100%" height={320}>
@@ -821,7 +821,7 @@ function ChartModal({
 function tokenFlowDialog(summary: UsageSummary): ChartDialog {
   return {
     title: "Token 流向",
-    description: "我的Token都去哪了",
+    description: "token 按输入、输出与缓存的分布",
     kind: "bars",
     xKey: "name",
     data: summary.tokenFlow,
@@ -834,7 +834,7 @@ function tokenFlowDialog(summary: UsageSummary): ChartDialog {
 function categoryDialog(summary: UsageSummary): ChartDialog {
   return {
     title: "Token 使用分类",
-    description: "我的Token都去哪了",
+    description: "token 按上下文构成分类的分布",
     kind: "bars",
     xKey: "name",
     data: summary.tokenCategories,
@@ -847,7 +847,7 @@ function categoryDialog(summary: UsageSummary): ChartDialog {
 function toolDialog(summary: UsageSummary): ChartDialog {
   return {
     title: "工具使用排行",
-    description: "哪些工具用的最多",
+    description: "按工具统计调用次数",
     kind: "bars",
     xKey: "name",
     data: summary.toolRanking,
@@ -860,7 +860,7 @@ function toolDialog(summary: UsageSummary): ChartDialog {
 function groupDialog(summary: UsageSummary): ChartDialog {
   return {
     title: "群使用统计",
-    description: "哪个群用的最厉害",
+    description: "按群统计 token 消耗量与请求次数",
     kind: "bars",
     xKey: "groupName",
     data: summary.groupRanking.map((group) => ({
@@ -881,7 +881,7 @@ function groupDialog(summary: UsageSummary): ChartDialog {
 function activityDialog(summary: UsageSummary): ChartDialog {
   return {
     title: "时间活动走势",
-    description: "要越用越多了吗",
+    description: "按时间统计请求量与 token 消耗",
     kind: "lines",
     xKey: "time",
     data: activityData(summary),
@@ -919,7 +919,7 @@ function averageTokenDialog(summary: UsageSummary): ChartDialog {
 function errorRateDialog(summary: UsageSummary): ChartDialog {
   return {
     title: "错误率趋势",
-    description: "没出错最好",
+    description: "失败请求占全部请求的比例",
     kind: "lines",
     xKey: "time",
     data: activityData(summary),
@@ -931,7 +931,7 @@ function errorRateDialog(summary: UsageSummary): ChartDialog {
 function cacheHitDialog(summary: UsageSummary): ChartDialog {
   return {
     title: "缓存命中率趋势",
-    description: "很难命中",
+    description: "缓存读取 token 占输入 token 的比例",
     kind: "lines",
     xKey: "time",
     data: activityData(summary),

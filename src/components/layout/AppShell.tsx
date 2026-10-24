@@ -16,9 +16,9 @@ import { toast } from "sonner";
 import { confirm } from "@/components/ui/confirm";
 
 const navItems = [
-  { to: "/", label: "状态总览" },
-  { to: "/config", label: "Mioku设置" },
-  { to: "/ai", label: "AI设置" },
+  { to: "/", label: "运行状态" },
+  { to: "/config", label: "Mioku 设置" },
+  { to: "/ai", label: "AI 设置" },
   { to: "/agent", label: "Agent" },
   { to: "/ai-usage", label: "使用统计" },
   { to: "/store", label: "插件市场" },
@@ -29,7 +29,7 @@ const navItems = [
   { to: "/service-config", label: "服务配置" },
   { to: "/adapter-config", label: "适配器配置" },
   { to: "/data-management", label: "数据管理" },
-  { to: "/webui", label: "WebUI管理" },
+  { to: "/webui", label: "WebUI 管理" },
   { to: "/about", label: "关于" },
 ];
 

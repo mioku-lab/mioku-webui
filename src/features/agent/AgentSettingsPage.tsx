@@ -309,7 +309,7 @@ export function AgentSettingsPage() {
         }),
       ]);
       snapshotRef.current = JSON.stringify({ base, settings });
-      toast.success("Agent 设置已保存~");
+      toast.success("Agent 设置已保存");
     } catch {
       toast.error("保存失败，请稍后再试");
     } finally {
@@ -367,19 +367,19 @@ export function AgentSettingsPage() {
       {activeTab === "skills" ? (
         <AgentTodoTab
           title="skills"
-          description="计划支持从工作区加载外部 skill 并注册到 AI 服务，让 Agent 按需调用可复用的任务说明。"
+          description="从工作区加载外部 skill 并注册到 AI 服务，Agent 按需调用可复用的任务说明。"
         />
       ) : null}
       {activeTab === "mcp" ? (
         <AgentTodoTab
           title="MCP"
-          description="计划支持接入 Model Context Protocol 服务器，把外部工具以 MCP 客户端的形式暴露给 Agent。"
+          description="接入 Model Context Protocol 服务器，将外部工具以 MCP 客户端的形式暴露给 Agent。"
         />
       ) : null}
       {activeTab === "knowledge" ? (
         <AgentTodoTab
           title="知识库"
-          description="计划支持混合检索（向量 + BM25 + 重排）的个人知识库，让 Agent 在回答前先检索长期记忆。"
+          description="混合检索（向量 + BM25 + 重排）的个人知识库，Agent 在回答前先检索长期记忆。"
         />
       ) : null}
     </div>
@@ -646,7 +646,7 @@ function RuntimeTab({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="压缩阈值" hint="随窗口自动调整">
+          <Field label="压缩阈值">
             <Input
               value={formatTokens(
                 Math.floor(settings.maxContextTokens * 0.9375),
@@ -694,7 +694,7 @@ function RuntimeTab({
               }}
             />
           </Field>
-          <Field label="审批等待 (秒)" hint="超时自动拒绝">
+          <Field label="审批等待 (秒)">
             <NumberInput
               min={30}
               value={settings.bash.approvalTimeoutMs / 1000}
@@ -731,7 +731,7 @@ function RuntimeTab({
               }}
             />
           </Field>
-          <Field label="正文长度上限" hint="提取文本的最大字符数">
+          <Field label="正文长度上限">
             <NumberInput
               min={500}
               value={settings.webFetch.maxChars}
@@ -799,7 +799,7 @@ function SearchTab({
               }}
             />
           </Field>
-          <Field label="默认结果数" hint="模型未指定时返回的结果数">
+          <Field label="默认结果数">
             <NumberInput
               min={1}
               value={webSearch.defaultLimit}
@@ -808,7 +808,7 @@ function SearchTab({
               }}
             />
           </Field>
-          <Field label="单次结果上限" hint="模型单次搜索最多返回的结果数">
+          <Field label="单次结果上限">
             <NumberInput
               min={1}
               value={webSearch.maxLimit}

@@ -129,14 +129,6 @@ type PersonalizationConfig = {
     windowHours: number;
     historyWindowCount: number;
   };
-  groupEvents: {
-    enabled: boolean;
-    indexWindowMinutes: number;
-    detailWindowMinutes: number;
-    detailMaxItems: number;
-    detailBudgetChars: number;
-    pokeWindowMinutes: number;
-  };
   emoji: {
     enabled: boolean;
     characters: string[];
@@ -261,14 +253,6 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
     windowHours: 5,
     historyWindowCount: 3,
   },
-  groupEvents: {
-    enabled: true,
-    indexWindowMinutes: 30,
-    detailWindowMinutes: 8,
-    detailMaxItems: 18,
-    detailBudgetChars: 700,
-    pokeWindowMinutes: 10,
-  },
   emoji: {
     enabled: false,
     characters: [],
@@ -276,8 +260,8 @@ const emptyPersonalizationConfig: PersonalizationConfig = {
   },
   expression: {
     enabled: true,
-    lookbackMessages: 100,
-    sampleSize: 6,
+    lookbackMessages: 200,
+    sampleSize: 30,
   },
 };
 
@@ -467,10 +451,6 @@ export function AIConfigPage() {
           ...emptyPersonalizationConfig.topic,
           ...(personalizationRes.data?.topic || {}),
         },
-        groupEvents: {
-          ...emptyPersonalizationConfig.groupEvents,
-          ...((personalizationRes.data as any)?.groupEvents || {}),
-        },
         emoji: {
           ...emptyPersonalizationConfig.emoji,
           ...(personalizationRes.data?.emoji || {}),
@@ -591,7 +571,7 @@ export function AIConfigPage() {
         settings: nextSettings,
       });
       setHasChanges(false);
-      toast.success("设置已保存~");
+      toast.success("设置已保存");
     } finally {
       setSaving(false);
     }
@@ -780,9 +760,6 @@ export function AIConfigPage() {
         <Card>
           <CardHeader>
             <CardTitle>回复体验</CardTitle>
-            <CardDescription>
-              控制 chat 插件怎么回、多久回、是否展示流式输出和打字停顿。
-            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
             <Field label="机器人昵称" hint="每行一个，用于触发和识别 bot 称呼">
@@ -875,9 +852,6 @@ export function AIConfigPage() {
         <Card>
           <CardHeader>
             <CardTitle>AI 请求限额</CardTitle>
-            <CardDescription>
-              限制 chat 插件每分钟可实际发起的总 AI 请求次数
-            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
             <Field
@@ -957,7 +931,7 @@ export function AIConfigPage() {
               />
               <ToggleField
                 title="打字延迟"
-                description="按内容长度模拟更自然的发送停顿；实际总等待时间还会受累计上限控制"
+                description="按内容长度模拟更自然的发送停顿"
                 checked={settings.enableTypingDelay}
                 onChange={(checked) =>
                   updateSettings("enableTypingDelay", checked)
@@ -977,7 +951,7 @@ export function AIConfigPage() {
               />
               <ToggleField
                 title="语音消息"
-                description="允许 AI 合成并发送简短语音；接口地址、密钥与超时由 audio 服务配置页管理"
+                description="允许 AI 合成并发送简短语音"
                 checked={settings.audio.enabled}
                 onChange={(checked) =>
                   setSettings((prev) => ({
@@ -988,7 +962,6 @@ export function AIConfigPage() {
               />
               <ToggleField
                 title="外部 Skills"
-                description="允许调用额外注册的技能扩展"
                 checked={settings.enableExternalSkills}
                 onChange={(checked) =>
                   updateSettings("enableExternalSkills", checked)
@@ -1000,7 +973,6 @@ export function AIConfigPage() {
             <>
               <ToggleField
                 title="调试日志"
-                description="打开后会输出更多运行时细节"
                 checked={settings.debug}
                 onChange={(checked) => updateSettings("debug", checked)}
               />
@@ -1017,7 +989,7 @@ export function AIConfigPage() {
               />
               <ToggleField
                 title="忽略私聊"
-                description="开启后 chat 插件忽略所有私聊消息，私聊交给 agent 插件处理"
+                description="开启后 chat 插件忽略所有私聊消息"
                 checked={base.ignorePrivateChat}
                 onChange={(checked) => updateBase("ignorePrivateChat", checked)}
               />
@@ -1078,12 +1050,7 @@ export function AIConfigPage() {
       {mode === "tools" ? (
         <Card>
           <CardHeader>
-            <CardTitle>外部 Skills 范围</CardTitle>
-            <CardDescription>
-              控制 chat 插件通过外部 Skills
-              能加载哪些扩展能力。留空表示允许全部已注册
-              Skills；如果想全部禁用，直接关闭上面的“外部 Skills”开关。
-            </CardDescription>
+            <CardTitle>外部技能范围</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Toggle
@@ -1131,8 +1098,7 @@ export function AIConfigPage() {
             )}
 
             <p className="text-xs text-muted-foreground">
-              关闭“允许全部已注册 Skills”后，AI 只能看到并加载下面勾选的外部
-              Skills。
+              关闭“允许全部已注册 Skills”后，只加载下面勾选的外部 Skills
             </p>
           </CardContent>
         </Card>
@@ -1162,9 +1128,7 @@ export function AIConfigPage() {
         <Card>
           <CardHeader>
             <CardTitle>动态延迟参数</CardTitle>
-            <CardDescription>
-              用于控制 bot 在热闹群里的“等一等再说”的策略
-            </CardDescription>
+            <CardDescription>控制活跃群聊中的回复延迟。</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
             <Field label="互动窗口 (分钟)" hint="统计活跃度的时间范围">
@@ -1275,9 +1239,6 @@ export function AIConfigPage() {
       <Card>
         <CardHeader>
           <CardTitle>核心人设</CardTitle>
-          <CardDescription>
-            决定 bot 是谁、说话像谁。这里是最影响整体风格的部分
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Field label="角色设定" hint="直接写给模型的人设说明">
@@ -1308,7 +1269,7 @@ export function AIConfigPage() {
                 }
               />
             </Field>
-            <Field label="切换风格概率" hint="0 到 1 之间">
+            <Field label="切换风格概率" hint="0 到 1，默认 0.2">
               <NumberInput
                 step="0.01"
                 value={personalization.replyStyle.multipleProbability}
@@ -1348,7 +1309,6 @@ export function AIConfigPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>情绪系统</CardTitle>
-              <CardDescription>决定 bot 当前情绪</CardDescription>
             </div>
             <Button
               type="button"
@@ -1429,11 +1389,7 @@ export function AIConfigPage() {
       {mode === "context" ? (
         <Card>
           <CardHeader>
-            <CardTitle>话题与群事件</CardTitle>
-            <CardDescription>
-              话题摘要提供「可见历史之外」的背景参考；群事件感知观察撤回、进退群、
-              拍一拍，常驻一行薄索引，被点名时才展开明细
-            </CardDescription>
+            <CardTitle>话题背景</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <CapabilityCard
@@ -1468,83 +1424,6 @@ export function AIConfigPage() {
                 }
               />
             </CapabilityCard>
-            <CapabilityCard
-              title="群事件感知"
-              description="观察撤回、进退群、拍一拍，按需注入上下文"
-              enabled={personalization.groupEvents.enabled}
-              onEnabledChange={(checked) =>
-                setPersonalization((prev) => ({
-                  ...prev,
-                  groupEvents: { ...prev.groupEvents, enabled: checked },
-                }))
-              }
-            >
-              <NumberField
-                label="索引统计窗口 (分钟)"
-                value={personalization.groupEvents.indexWindowMinutes}
-                onChange={(value) =>
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    groupEvents: {
-                      ...prev.groupEvents,
-                      indexWindowMinutes: value,
-                    },
-                  }))
-                }
-              />
-              <NumberField
-                label="明细窗口 (分钟)"
-                value={personalization.groupEvents.detailWindowMinutes}
-                onChange={(value) =>
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    groupEvents: {
-                      ...prev.groupEvents,
-                      detailWindowMinutes: value,
-                    },
-                  }))
-                }
-              />
-              <NumberField
-                label="明细最多条数"
-                value={personalization.groupEvents.detailMaxItems}
-                onChange={(value) =>
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    groupEvents: {
-                      ...prev.groupEvents,
-                      detailMaxItems: value,
-                    },
-                  }))
-                }
-              />
-              <NumberField
-                label="明细字符预算"
-                value={personalization.groupEvents.detailBudgetChars}
-                onChange={(value) =>
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    groupEvents: {
-                      ...prev.groupEvents,
-                      detailBudgetChars: value,
-                    },
-                  }))
-                }
-              />
-              <NumberField
-                label="拍一拍告知窗口 (分钟)"
-                value={personalization.groupEvents.pokeWindowMinutes}
-                onChange={(value) =>
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    groupEvents: {
-                      ...prev.groupEvents,
-                      pokeWindowMinutes: value,
-                    },
-                  }))
-                }
-              />
-            </CapabilityCard>
           </CardContent>
         </Card>
       ) : null}
@@ -1553,14 +1432,11 @@ export function AIConfigPage() {
         <Card>
           <CardHeader>
             <CardTitle>表达样本</CardTitle>
-            <CardDescription>
-              主对话被触发时，直接拉该用户最近的真人原话当风格样本
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <CapabilityCard
               title="Expression"
-              description="把该用户最近说过的原话抽几条注入，只学长度和语气，不学内容"
+              description="把该用户最近说过的原话抽几条注入"
               enabled={personalization.expression.enabled}
               onEnabledChange={(checked) =>
                 setPersonalization((prev) => ({
@@ -1601,9 +1477,6 @@ export function AIConfigPage() {
         <Card>
           <CardHeader>
             <CardTitle>外部能力</CardTitle>
-            <CardDescription>
-              搜索和网页阅读属于高影响能力，建议先按需打开，再配置超时和内容限制
-            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 xl:grid-cols-2">
             <CapabilityCard
@@ -1915,7 +1788,7 @@ function ToggleField({
   onChange,
 }: {
   title: string;
-  description: string;
+  description?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
 }) {
@@ -1924,7 +1797,9 @@ function ToggleField({
       <label className="flex h-full min-h-14 cursor-pointer items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold">{title}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+          {description ? (
+            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+          ) : null}
         </div>
         <Switch
           className="shrink-0"

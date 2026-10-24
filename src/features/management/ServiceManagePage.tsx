@@ -540,7 +540,7 @@ export function ServiceManagePage() {
         <Card className="animate-soft-pop">
           <CardHeader>
             <CardTitle>服务总览</CardTitle>
-            <CardDescription>点击某服务查看其详情 :)</CardDescription>
+            <CardDescription>选择服务查看详情。</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

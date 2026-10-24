@@ -583,7 +583,7 @@ export function PluginManagePage() {
         <Card className="animate-soft-pop">
           <CardHeader>
             <CardTitle>插件总览</CardTitle>
-            <CardDescription>点击某插件查看其详情 :)</CardDescription>
+            <CardDescription>选择插件查看详情。</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -33,7 +33,7 @@ type OverviewResponse = {
 };
 
 const introText =
-  "Mioku 是一个以初音未来为主题，AI优先，跨平台的机器人框架。在Mioku中，AI将掌控一切。像真人一样思考、水群、发表情包、网络搜索，甚至是自己使用自己的插件通通不在话下。";
+  "Mioku 是一个插件式机器人框架，使用 TypeScript 编写，运行在 Node.js 22.18 及以上版本。它做两件事。第一件是把平台消息转换成插件可以处理的事件。第二件是把插件要执行的动作转换成平台指令。";
 
 export function AboutPage() {
   const { setLeftContent, setCenterContent, setRightContent, setDenseHeader } =

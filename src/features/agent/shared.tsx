@@ -186,7 +186,7 @@ export function AgentNotInstalled() {
             </p>
           </div>
           <Button variant="outline" onClick={() => navigate("/store")}>
-            去插件市场看看
+            前往插件市场
           </Button>
         </CardContent>
       </Card>
