@@ -24,6 +24,7 @@ import { useTopbar } from "@/components/layout/TopbarContext";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { cn } from "@/lib/utils";
 import { DatasourceMultiSelectField } from "@/features/mioku/DatasourceMultiSelectField";
+import { SkillsTab, type SkillsTabConfig } from "./SkillsTab";
 import {
   AgentNotInstalled,
   AgentTodoTab,
@@ -76,6 +77,7 @@ type AgentSettings = {
   debug: boolean;
   webSearch: WebSearchConfig;
   webFetch: WebFetchConfig;
+  skills: SkillsTabConfig;
 };
 
 const emptyBase: AgentBase = {
@@ -103,6 +105,15 @@ const emptySettings: AgentSettings = {
     maxSearchCount: 50,
   },
   webFetch: { enabled: true, timeoutMs: 15000, maxChars: 12000 },
+  skills: {
+    enabled: true,
+    extraRoots: [],
+    maxInPrompt: 50,
+    descriptionMaxLength: 500,
+    activationTtlMs: 3600000,
+    rescanIntervalMs: 2000,
+    maxResourceFiles: 200,
+  },
 };
 
 const permissionOptions = [
@@ -139,7 +150,7 @@ const agentTabs: Array<{ id: AgentTab; label: string; todo?: boolean }> = [
   { id: "base", label: "基本设置" },
   { id: "runtime", label: "运行时" },
   { id: "search", label: "网页搜索" },
-  { id: "skills", label: "skills", todo: true },
+  { id: "skills", label: "技能" },
   { id: "mcp", label: "MCP", todo: true },
   { id: "knowledge", label: "知识库", todo: true },
 ];
@@ -255,6 +266,13 @@ export function AgentSettingsPage() {
             ...emptySettings.webFetch,
             ...(settingsRes.data?.webFetch ?? {}),
           },
+          skills: {
+            ...emptySettings.skills,
+            ...(settingsRes.data?.skills ?? {}),
+            extraRoots: Array.isArray(settingsRes.data?.skills?.extraRoots)
+              ? settingsRes.data!.skills!.extraRoots.map(String)
+              : [],
+          },
         };
         setBase(nextBase);
         setSettings(nextSettings);
@@ -365,9 +383,14 @@ export function AgentSettingsPage() {
         <SearchTab settings={settings} setSettings={setSettings} />
       ) : null}
       {activeTab === "skills" ? (
-        <AgentTodoTab
-          title="skills"
-          description="从工作区加载外部 skill 并注册到 AI 服务，Agent 按需调用可复用的任务说明。"
+        <SkillsTab
+          value={settings.skills}
+          onChange={(patch) =>
+            setSettings((prev) => ({
+              ...prev,
+              skills: { ...prev.skills, ...patch },
+            }))
+          }
         />
       ) : null}
       {activeTab === "mcp" ? (

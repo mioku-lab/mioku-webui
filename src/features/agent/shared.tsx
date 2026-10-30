@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bot, Construction } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -192,4 +192,109 @@ export function AgentNotInstalled() {
       </Card>
     </div>
   );
+}
+
+export interface AgentSkillDiagnostic {
+  level: "error" | "warn";
+  code: string;
+  message: string;
+  path: string;
+}
+
+export interface AgentSkillOrigin {
+  kind: "git" | "file" | "archive" | "local";
+  input: string;
+  display: string;
+  installedAt: number;
+}
+
+export interface AgentSkillItem {
+  name: string;
+  description: string;
+  rootId: string;
+  rootLabel: string;
+  rootPath: string;
+  dir: string;
+  path: string;
+  resources: number;
+  modelInvocable: boolean;
+  userInvocable: boolean;
+  enabled: boolean;
+  canUninstall: boolean;
+  origin?: AgentSkillOrigin;
+  diagnostics: AgentSkillDiagnostic[];
+}
+
+export interface AgentSkillRoot {
+  id: string;
+  label: string;
+  kind: string;
+  path: string;
+  rank: number;
+  writable: boolean;
+  exists: boolean;
+  skills: number;
+}
+
+export interface AgentSkillDetail extends AgentSkillItem {
+  content: string;
+  resourceList: string[];
+  allowedTools: string[];
+  license?: string;
+  compatibility?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface AgentSkillInstallCandidate {
+  rel: string;
+  name: string;
+  description: string;
+  dir: string;
+  path: string;
+  files: number;
+  valid: boolean;
+  diagnostics: AgentSkillDiagnostic[];
+}
+
+export interface AgentSkillProbe {
+  stagingId: string;
+  display: string;
+  candidates: AgentSkillInstallCandidate[];
+}
+
+interface SkillsPayload {
+  skills: AgentSkillItem[];
+  roots: AgentSkillRoot[];
+  diagnostics: AgentSkillDiagnostic[];
+}
+
+/** 技能列表 + 扫描根；装卸 / 启停后调用 reload */
+export function useAgentSkills(): {
+  skills: AgentSkillItem[];
+  roots: AgentSkillRoot[];
+  loading: boolean;
+  reload: () => Promise<void>;
+} {
+  const [skills, setSkills] = useState<AgentSkillItem[]>([]);
+  const [roots, setRoots] = useState<AgentSkillRoot[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const reload = useCallback(async () => {
+    try {
+      const res = await apiFetch<{ data: SkillsPayload }>("/api/agent/skills");
+      setSkills(res.data?.skills ?? []);
+      setRoots(res.data?.roots ?? []);
+    } catch {
+      setSkills([]);
+      setRoots([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { skills, roots, loading, reload };
 }
