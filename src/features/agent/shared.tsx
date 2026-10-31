@@ -48,6 +48,22 @@ export function useAgentInstalled(): boolean | null {
   return installed;
 }
 
+/**
+ * MCP 服务是否安装。查的是已安装的包而不是 `/api/mcp/overview`：
+ * apiFetch 对非 2xx 会直接弹 toast，未安装时不该弹。
+ */
+export function useMcpServiceInstalled(): boolean | null {
+  const [installed, setInstalled] = useState<boolean | null>(null);
+  useEffect(() => {
+    apiFetch<{ data: Array<{ name: string }> }>("/api/manage/services")
+      .then((res) =>
+        setInstalled((res.data ?? []).some((item) => item.name === "mcp")),
+      )
+      .catch(() => setInstalled(false));
+  }, []);
+  return installed;
+}
+
 export function useFriendOptions(): DatasourceOption[] {
   const [options, setOptions] = useState<DatasourceOption[]>([]);
   useEffect(() => {

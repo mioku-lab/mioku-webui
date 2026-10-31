@@ -25,6 +25,7 @@ import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { cn } from "@/lib/utils";
 import { DatasourceMultiSelectField } from "@/features/mioku/DatasourceMultiSelectField";
 import { SkillsTab, type SkillsTabConfig } from "./SkillsTab";
+import { McpTab, McpNotInstalled } from "./mcp/McpTab";
 import {
   AgentNotInstalled,
   AgentTodoTab,
@@ -35,6 +36,7 @@ import {
   formatWindowLabel,
   useAgentInstalled,
   useFriendOptions,
+  useMcpServiceInstalled,
 } from "./shared";
 
 type PermissionLevel =
@@ -78,6 +80,7 @@ type AgentSettings = {
   webSearch: WebSearchConfig;
   webFetch: WebFetchConfig;
   skills: SkillsTabConfig;
+  mcp: { enabled: boolean; maxTools: number };
 };
 
 const emptyBase: AgentBase = {
@@ -105,6 +108,7 @@ const emptySettings: AgentSettings = {
     maxSearchCount: 50,
   },
   webFetch: { enabled: true, timeoutMs: 15000, maxChars: 12000 },
+  mcp: { enabled: true, maxTools: 48 },
   skills: {
     enabled: true,
     extraRoots: [],
@@ -151,7 +155,7 @@ const agentTabs: Array<{ id: AgentTab; label: string; todo?: boolean }> = [
   { id: "runtime", label: "运行时" },
   { id: "search", label: "网页搜索" },
   { id: "skills", label: "技能" },
-  { id: "mcp", label: "MCP", todo: true },
+  { id: "mcp", label: "MCP" },
   { id: "knowledge", label: "知识库", todo: true },
 ];
 
@@ -213,6 +217,7 @@ export function AgentSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const snapshotRef = useRef("");
+  const mcpInstalled = useMcpServiceInstalled();
   const { setLeftContent, setRightContent } = useTopbar();
 
   const hasChanges =
@@ -266,6 +271,7 @@ export function AgentSettingsPage() {
             ...emptySettings.webFetch,
             ...(settingsRes.data?.webFetch ?? {}),
           },
+          mcp: { ...emptySettings.mcp, ...(settingsRes.data?.mcp ?? {}) },
           skills: {
             ...emptySettings.skills,
             ...(settingsRes.data?.skills ?? {}),
@@ -394,10 +400,11 @@ export function AgentSettingsPage() {
         />
       ) : null}
       {activeTab === "mcp" ? (
-        <AgentTodoTab
-          title="MCP"
-          description="接入 Model Context Protocol 服务器，将外部工具以 MCP 客户端的形式暴露给 Agent。"
-        />
+        mcpInstalled === false ? (
+          <McpNotInstalled />
+        ) : (
+          <McpToolsTab settings={settings} setSettings={setSettings} />
+        )
       ) : null}
       {activeTab === "knowledge" ? (
         <AgentTodoTab
@@ -405,6 +412,54 @@ export function AgentSettingsPage() {
           description="混合检索（向量 + BM25 + 重排）的个人知识库，Agent 在回答前先检索长期记忆。"
         />
       ) : null}
+    </div>
+  );
+}
+
+/** Agent 侧的 MCP 开关 + 服务端的服务器管理 */
+function McpToolsTab({
+  settings,
+  setSettings,
+}: {
+  settings: AgentSettings;
+  setSettings: React.Dispatch<React.SetStateAction<AgentSettings>>;
+}) {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Agent 侧开关</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <ToggleField
+            label="启用 MCP 工具"
+            hint=""
+            checked={settings.mcp.enabled}
+            onChange={(enabled) =>
+              setSettings((prev) => ({
+                ...prev,
+                mcp: { ...prev.mcp, enabled },
+              }))
+            }
+          />
+          <Field label="工具数上限" hint="">
+            <NumberInput
+              min={1}
+              value={settings.mcp.maxTools}
+              onValueChange={(value) => {
+                if (value !== null) {
+                  setSettings((prev) => ({
+                    ...prev,
+                    mcp: { ...prev.mcp, maxTools: value },
+                  }));
+                }
+              }}
+            />
+          </Field>
+        </CardContent>
+      </Card>
+
+      <McpTab />
     </div>
   );
 }
@@ -423,10 +478,6 @@ function BaseTab({
       <Card>
         <CardHeader>
           <CardTitle>Agent 基础</CardTitle>
-          <CardDescription>
-            私聊 Agent 的接入范围。人设与情绪读取 chat
-            插件「回复与角色」中的配置，chat 未安装时不下发人设提示词。
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <ToggleField
