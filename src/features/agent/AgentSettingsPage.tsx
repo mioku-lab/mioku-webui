@@ -28,7 +28,6 @@ import { SkillsTab, type SkillsTabConfig } from "./SkillsTab";
 import { McpTab, McpNotInstalled } from "./mcp/McpTab";
 import {
   AgentNotInstalled,
-  AgentTodoTab,
   CONTEXT_WINDOW_CHOICES,
   DEFAULT_CONTEXT_WINDOW,
   ModelOverrideSelect,
@@ -68,6 +67,21 @@ type WebFetchConfig = {
   maxChars: number;
 };
 
+type AgentMemory = {
+  enabled: boolean;
+  injectEnabled: boolean;
+  injectTopK: number;
+  injectMaxChars: number;
+  injectTimeoutMs: number;
+  retentionMonths: number;
+  maxPerUser: number;
+  autoExtract: boolean;
+  toolEnabled: boolean;
+  indexSessions: boolean;
+  groupLookupEnabled: boolean;
+  cacheTtlMs: number;
+};
+
 type AgentSettings = {
   maxIterations: number;
   maxContextTokens: number;
@@ -88,6 +102,21 @@ const emptyBase: AgentBase = {
   workspaceDir: "",
   permissionLevel: "workspace-write",
   model: "",
+};
+
+const emptyMemory: AgentMemory = {
+  enabled: true,
+  injectEnabled: true,
+  injectTopK: 5,
+  injectMaxChars: 700,
+  injectTimeoutMs: 250,
+  retentionMonths: 3,
+  maxPerUser: 2000,
+  autoExtract: true,
+  toolEnabled: true,
+  indexSessions: true,
+  groupLookupEnabled: true,
+  cacheTtlMs: 90000,
 };
 
 const emptySettings: AgentSettings = {
@@ -148,7 +177,7 @@ const permissionOptions = [
   },
 ] as const;
 
-type AgentTab = "base" | "runtime" | "search" | "skills" | "mcp" | "knowledge";
+type AgentTab = "base" | "runtime" | "search" | "skills" | "mcp" | "memory";
 
 const agentTabs: Array<{ id: AgentTab; label: string; todo?: boolean }> = [
   { id: "base", label: "基本设置" },
@@ -156,7 +185,7 @@ const agentTabs: Array<{ id: AgentTab; label: string; todo?: boolean }> = [
   { id: "search", label: "网页搜索" },
   { id: "skills", label: "技能" },
   { id: "mcp", label: "MCP" },
-  { id: "knowledge", label: "知识库", todo: true },
+  { id: "memory", label: "记忆" },
 ];
 
 function Field({
@@ -213,6 +242,7 @@ export function AgentSettingsPage() {
   const installed = useAgentInstalled();
   const [base, setBase] = useState<AgentBase>(emptyBase);
   const [settings, setSettings] = useState<AgentSettings>(emptySettings);
+  const [memory, setMemory] = useState<AgentMemory>(emptyMemory);
   const [activeTab, setActiveTab] = useState<AgentTab>("base");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -222,7 +252,7 @@ export function AgentSettingsPage() {
 
   const hasChanges =
     snapshotRef.current.length > 0 &&
-    JSON.stringify({ base, settings }) !== snapshotRef.current;
+    JSON.stringify({ base, settings, memory }) !== snapshotRef.current;
 
   useUnsavedChanges(hasChanges, {
     message: "Agent 设置还没有保存，确定要离开吗？",
@@ -237,9 +267,12 @@ export function AgentSettingsPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [baseRes, settingsRes] = await Promise.all([
+        const [baseRes, settingsRes, memoryRes] = await Promise.all([
           apiFetch<{ data: Partial<AgentBase> }>("/api/agent/base"),
           apiFetch<{ data: Partial<AgentSettings> }>("/api/agent/settings"),
+          apiFetch<{ data: Partial<AgentMemory> }>("/api/agent/memory").catch(
+            () => ({ data: {} }),
+          ),
         ]);
         const nextBase: AgentBase = {
           access: { ...emptyBase.access, ...(baseRes.data?.access ?? {}) },
@@ -280,11 +313,17 @@ export function AgentSettingsPage() {
               : [],
           },
         };
+        const nextMemory: AgentMemory = {
+          ...emptyMemory,
+          ...(memoryRes.data ?? {}),
+        };
         setBase(nextBase);
         setSettings(nextSettings);
+        setMemory(nextMemory);
         snapshotRef.current = JSON.stringify({
           base: nextBase,
           settings: nextSettings,
+          memory: nextMemory,
         });
       } finally {
         setLoading(false);
@@ -331,8 +370,12 @@ export function AgentSettingsPage() {
           method: "PUT",
           body: JSON.stringify(settings),
         }),
+        apiFetch("/api/agent/memory", {
+          method: "PUT",
+          body: JSON.stringify(memory),
+        }),
       ]);
-      snapshotRef.current = JSON.stringify({ base, settings });
+      snapshotRef.current = JSON.stringify({ base, settings, memory });
       toast.success("Agent 设置已保存");
     } catch {
       toast.error("保存失败，请稍后再试");
@@ -406,11 +449,8 @@ export function AgentSettingsPage() {
           <McpToolsTab settings={settings} setSettings={setSettings} />
         )
       ) : null}
-      {activeTab === "knowledge" ? (
-        <AgentTodoTab
-          title="知识库"
-          description="混合检索（向量 + BM25 + 重排）的个人知识库，Agent 在回答前先检索长期记忆。"
-        />
+      {activeTab === "memory" ? (
+        <MemoryTab memory={memory} setMemory={setMemory} />
       ) : null}
     </div>
   );
@@ -460,6 +500,144 @@ function McpToolsTab({
       </Card>
 
       <McpTab />
+    </div>
+  );
+}
+
+function MemoryTab({
+  memory,
+  setMemory,
+}: {
+  memory: AgentMemory;
+  setMemory: React.Dispatch<React.SetStateAction<AgentMemory>>;
+}) {
+  const update = <K extends keyof AgentMemory>(
+    key: K,
+    value: AgentMemory[K],
+  ) => {
+    setMemory((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const Num = ({
+    label,
+    hint,
+    value,
+    onChange,
+  }: {
+    label: string;
+    hint?: string;
+    value: number;
+    onChange: (value: number) => void;
+  }) => (
+    <Field label={label} hint={hint ?? ""}>
+      <NumberInput
+        min={0}
+        value={value}
+        onValueChange={(next) => {
+          if (next !== null) onChange(next);
+        }}
+      />
+    </Field>
+  );
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>长期记忆</CardTitle>
+          <CardDescription>跨会话保留有价值的事实</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <ToggleField
+            label="启用长期记忆"
+            hint=""
+            checked={memory.enabled}
+            onChange={(checked) => update("enabled", checked)}
+          />
+          <ToggleField
+            label="允许模型使用记忆工具"
+            hint=""
+            checked={memory.toolEnabled}
+            onChange={(checked) => update("toolEnabled", checked)}
+          />
+          <Num
+            label="记忆保留时长（月）"
+            value={memory.retentionMonths}
+            onChange={(value) => update("retentionMonths", value)}
+          />
+          <Num
+            label="每人记忆上限（条）"
+            hint="超出后按「重要性低、时间旧」淘汰"
+            value={memory.maxPerUser}
+            onChange={(value) => update("maxPerUser", value)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>注入</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <ToggleField
+            label="每轮自动注入相关记忆"
+            hint="关闭后只有模型主动调 recall 才会看到记忆"
+            checked={memory.injectEnabled}
+            onChange={(checked) => update("injectEnabled", checked)}
+          />
+          <Num
+            label="每轮注入条数"
+            value={memory.injectTopK}
+            onChange={(value) => update("injectTopK", value)}
+          />
+          <Num
+            label="注入块字符上限"
+            value={memory.injectMaxChars}
+            onChange={(value) => update("injectMaxChars", value)}
+          />
+          <Num
+            label="检索超时（毫秒）"
+            hint="超时就不注入，避免拖慢回复"
+            value={memory.injectTimeoutMs}
+            onChange={(value) => update("injectTimeoutMs", value)}
+          />
+          <Num
+            label="注入缓存（秒）"
+            hint="相同问题短时间内复用检索结果，0 表示不缓存"
+            value={Math.round(memory.cacheTtlMs / 1000)}
+            onChange={(value) => update("cacheTtlMs", value * 1000)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>写入与检索范围</CardTitle>
+          <CardDescription>
+            压缩摘要、历史会话和群聊资料都可以成为记忆的来源
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <ToggleField
+            label="压缩历史时抽取记忆"
+            hint="复用压缩那一次模型调用产出长期记忆"
+            checked={memory.autoExtract}
+            onChange={(checked) => update("autoExtract", checked)}
+          />
+          <ToggleField
+            label="索引历史会话摘要"
+            hint=""
+            checked={memory.indexSessions}
+            onChange={(checked) => update("indexSessions", checked)}
+          />
+          <ToggleField
+            label="允许查询群聊资料"
+            hint=""
+            checked={memory.groupLookupEnabled}
+            onChange={(checked) => update("groupLookupEnabled", checked)}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

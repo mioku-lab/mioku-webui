@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Bot,
   BrainCircuit,
+  Database,
   Images,
   MessageSquareText,
   Plus,
@@ -147,10 +148,65 @@ type AIResources = {
   tools: string[];
 };
 
+type MemoryConfig = {
+  enabled: boolean;
+  extractModel: "working" | "main";
+  windowMinutes: number;
+  minMessagesPerWindow: number;
+  maxBufferMessages: number;
+  extractIntervalMs: number;
+  maxCharsPerWindow: number;
+  minConfidence: number;
+  maxItemsPerGroup: number;
+  retentionMonths: number;
+  injectTopK: number;
+  injectMaxChars: number;
+  injectTimeoutMs: number;
+  profileEnabled: boolean;
+  profileUpdateEvery: number;
+  recallToolsEnabled: boolean;
+  recallToolBudget: number;
+  contextLookbackDays: number;
+  cacheTtlMs: number;
+  indexMessages: boolean;
+  indexMessageMinChars: number;
+  indexMessageRetentionDays: number;
+  sourceTraceback: boolean;
+  sourceTracebackLimit: number;
+};
+
+const emptyMemoryConfig: MemoryConfig = {
+  enabled: true,
+  extractModel: "working",
+  windowMinutes: 30,
+  minMessagesPerWindow: 12,
+  maxBufferMessages: 80,
+  extractIntervalMs: 300000,
+  maxCharsPerWindow: 4000,
+  minConfidence: 0.55,
+  maxItemsPerGroup: 3000,
+  retentionMonths: 3,
+  injectTopK: 6,
+  injectMaxChars: 700,
+  injectTimeoutMs: 250,
+  profileEnabled: true,
+  profileUpdateEvery: 40,
+  recallToolsEnabled: true,
+  recallToolBudget: 3,
+  contextLookbackDays: 30,
+  cacheTtlMs: 90000,
+  indexMessages: false,
+  indexMessageMinChars: 8,
+  indexMessageRetentionDays: 14,
+  sourceTraceback: true,
+  sourceTracebackLimit: 3,
+};
+
 type ConfigTab =
   | "model"
   | "reply"
   | "context"
+  | "memory"
   | "tools"
   | "runtime"
   | "stickers";
@@ -159,6 +215,7 @@ const configTabs = [
   { id: "model", label: "提供商与模型", icon: BrainCircuit },
   { id: "reply", label: "回复与角色", icon: MessageSquareText },
   { id: "context", label: "上下文与主动性", icon: Bot },
+  { id: "memory", label: "记忆", icon: Database },
   { id: "tools", label: "工具与媒体", icon: Wrench },
   { id: "runtime", label: "群聊与运行", icon: Settings2 },
   { id: "stickers", label: "表情包", icon: Images },
@@ -378,6 +435,7 @@ export function AIConfigPage() {
     emptyPersonalizationConfig,
   );
   const [settings, setSettings] = useState<SettingsConfig>(emptySettingsConfig);
+  const [memory, setMemory] = useState<MemoryConfig>(emptyMemoryConfig);
   const [resources, setResources] = useState<AIResources>({
     instances: [],
     skills: [],
@@ -407,6 +465,7 @@ export function AIConfigPage() {
         skillsRes,
         groupsRes,
         stickersRes,
+        memoryRes,
       ] = await Promise.all([
         apiFetch<{ data: BaseConfig }>("/api/ai/base"),
         apiFetch<{ data: PersonalizationConfig }>("/api/ai/personalization"),
@@ -423,6 +482,11 @@ export function AIConfigPage() {
         apiFetch<{ data: StickerOption[] }>("/api/ai/stickers").catch(() => ({
           data: [],
         })),
+        apiFetch<{ data: Partial<MemoryConfig> }>("/api/ai/memory").catch(
+          () => ({
+            data: {},
+          }),
+        ),
       ]);
 
       const nextBase = { ...emptyBaseConfig, ...(baseRes.data || {}) };
@@ -508,11 +572,17 @@ export function AIConfigPage() {
       });
       setGroupOptions(groupsRes.data || []);
       setStickerOptions(stickersRes.data || []);
+      const nextMemory: MemoryConfig = {
+        ...emptyMemoryConfig,
+        ...(memoryRes.data || {}),
+      };
+      setMemory(nextMemory);
 
       initialSnapshotRef.current = JSON.stringify({
         base: nextBase,
         personalization: nextPersonalization,
         settings: nextSettings,
+        memory: nextMemory,
       });
       setHasChanges(false);
     } finally {
@@ -529,12 +599,13 @@ export function AIConfigPage() {
       base,
       personalization,
       settings,
+      memory,
     });
     setHasChanges(
       initialSnapshotRef.current.length > 0 &&
         currentSnapshot !== initialSnapshotRef.current,
     );
-  }, [base, personalization, settings]);
+  }, [base, personalization, settings, memory]);
 
   async function saveAll() {
     setSaving(true);
@@ -562,6 +633,10 @@ export function AIConfigPage() {
           method: "PUT",
           body: JSON.stringify(nextSettings),
         }),
+        apiFetch("/api/ai/memory", {
+          method: "PUT",
+          body: JSON.stringify(memory),
+        }),
       ]);
       setPersonalization(nextPersonalization);
       setSettings(nextSettings);
@@ -569,6 +644,7 @@ export function AIConfigPage() {
         base,
         personalization: nextPersonalization,
         settings: nextSettings,
+        memory,
       });
       setHasChanges(false);
       toast.success("设置已保存");
@@ -1629,6 +1705,215 @@ export function AIConfigPage() {
     </div>
   );
 
+  const updateMemory = <K extends keyof MemoryConfig>(
+    key: K,
+    value: MemoryConfig[K],
+  ) => {
+    setMemory((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const renderMemoryTab = () => (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>长期记忆</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <ToggleField
+            title="启用群聊记忆"
+            description=""
+            checked={memory.enabled}
+            onChange={(checked) => updateMemory("enabled", checked)}
+          />
+          <Field label="抽取模型">
+            <SelectField
+              value={memory.extractModel}
+              onChange={(value) =>
+                updateMemory(
+                  "extractModel",
+                  value === "main" ? "main" : "working",
+                )
+              }
+              options={[
+                { value: "working", label: "工作模型（推荐）" },
+                { value: "main", label: "主模型" },
+              ]}
+            />
+          </Field>
+          <NumberField
+            label="记忆保留时长（月）"
+            hint=""
+            value={memory.retentionMonths}
+            onChange={(value) => updateMemory("retentionMonths", value)}
+          />
+          <NumberField
+            label="每群记忆上限（条）"
+            hint="超出后按「重要性低、时间旧」淘汰"
+            value={memory.maxItemsPerGroup}
+            onChange={(value) => updateMemory("maxItemsPerGroup", value)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>抽取节奏</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <NumberField
+            label="抽取窗口（分钟）"
+            hint=""
+            value={memory.windowMinutes}
+            onChange={(value) => updateMemory("windowMinutes", value)}
+          />
+          <NumberField
+            label="每次至少多少条消息"
+            hint=""
+            value={memory.minMessagesPerWindow}
+            onChange={(value) => updateMemory("minMessagesPerWindow", value)}
+          />
+          <NumberField
+            label="最低置信度"
+            hint="0~1。调高更保守，调低更容易记错"
+            value={memory.minConfidence}
+            onChange={(value) => updateMemory("minConfidence", value)}
+            step="0.05"
+          />
+          <NumberField
+            label="单次送入的字符上限"
+            hint="越小越快、越省，但可能漏掉长消息"
+            value={memory.maxCharsPerWindow}
+            onChange={(value) => updateMemory("maxCharsPerWindow", value)}
+          />
+          <NumberField
+            label="单群缓冲上限（条）"
+            hint=""
+            value={memory.maxBufferMessages}
+            onChange={(value) => updateMemory("maxBufferMessages", value)}
+          />
+          <NumberField
+            label="检查间隔（秒）"
+            hint=""
+            value={Math.round(memory.extractIntervalMs / 1000)}
+            onChange={(value) =>
+              updateMemory("extractIntervalMs", value * 1000)
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>注入</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <NumberField
+            label="每轮注入条数"
+            value={memory.injectTopK}
+            onChange={(value) => updateMemory("injectTopK", value)}
+          />
+          <NumberField
+            label="注入块字符上限"
+            value={memory.injectMaxChars}
+            onChange={(value) => updateMemory("injectMaxChars", value)}
+          />
+          <NumberField
+            label="检索超时（毫秒）"
+            value={memory.injectTimeoutMs}
+            onChange={(value) => updateMemory("injectTimeoutMs", value)}
+          />
+          <NumberField
+            label="注入缓存（秒）"
+            hint="同一条消息触发多轮时复用检索结果，0 表示不缓存"
+            value={Math.round(memory.cacheTtlMs / 1000)}
+            onChange={(value) => updateMemory("cacheTtlMs", value * 1000)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>群员画像</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <ToggleField
+            title="启用群员画像"
+            checked={memory.profileEnabled}
+            onChange={(checked) => updateMemory("profileEnabled", checked)}
+          />
+          <NumberField
+            label="每积累多少条发言重画一次"
+            value={memory.profileUpdateEvery}
+            onChange={(value) => updateMemory("profileUpdateEvery", value)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>资料查找</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <ToggleField
+            title="允许模型主动查资料"
+            checked={memory.recallToolsEnabled}
+            onChange={(checked) => updateMemory("recallToolsEnabled", checked)}
+          />
+          <NumberField
+            label="每轮工具调用上限"
+            value={memory.recallToolBudget}
+            onChange={(value) => updateMemory("recallToolBudget", value)}
+          />
+          <NumberField
+            label="默认回溯天数"
+            hint="模型不指定天数时往回查多久"
+            value={memory.contextLookbackDays}
+            onChange={(value) => updateMemory("contextLookbackDays", value)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>原文索引与原话</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <ToggleField
+            title="原文消息也入向量库"
+            description="每条有信息量的群消息都做一次本地向量化，检索随历史变慢"
+            checked={memory.indexMessages}
+            onChange={(checked) => updateMemory("indexMessages", checked)}
+          />
+          <NumberField
+            label="入向量的最短消息长度"
+            hint="太短的复读、表情会被跳过"
+            value={memory.indexMessageMinChars}
+            onChange={(value) => updateMemory("indexMessageMinChars", value)}
+          />
+          <NumberField
+            label="原文索引保留天数"
+            hint="原文向量只当热数据"
+            value={memory.indexMessageRetentionDays}
+            onChange={(value) =>
+              updateMemory("indexMessageRetentionDays", value)
+            }
+          />
+          <ToggleField
+            title="记忆附带原话"
+            description="抽取时保存说话原话，命中记忆时一起给模型"
+            checked={memory.sourceTraceback}
+            onChange={(checked) => updateMemory("sourceTraceback", checked)}
+          />
+          <NumberField
+            label="每次回查几条原文"
+            value={memory.sourceTracebackLimit}
+            onChange={(value) => updateMemory("sourceTracebackLimit", value)}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   const renderStickerTab = () => (
     <Card>
       <CardHeader className="border-b">
@@ -1739,6 +2024,7 @@ export function AIConfigPage() {
       {!loading && activeTab === "runtime"
         ? renderBehaviorTab("runtime")
         : null}
+      {!loading && activeTab === "memory" ? renderMemoryTab() : null}
       {!loading && activeTab === "stickers" ? renderStickerTab() : null}
     </div>
   );
