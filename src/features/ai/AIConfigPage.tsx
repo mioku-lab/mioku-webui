@@ -3,6 +3,7 @@ import {
   Bot,
   BrainCircuit,
   Database,
+  Ghost,
   Images,
   MessageSquareText,
   Plus,
@@ -40,6 +41,16 @@ import { DatasourceMultiSelectField } from "@/features/mioku/DatasourceMultiSele
 import type { DatasourceOption } from "@/features/plugin-config/datasource-utils";
 import { StickerPicker, type StickerOption } from "@/features/ai/StickerPicker";
 import { ProvidersModelsTab } from "@/features/ai/ProvidersModelsTab";
+import { ThemePackSection } from "@/features/ai/ThemePackSection";
+import {
+  EMPTY_THEME_CATALOG,
+  createCustomThemeId,
+  isBuiltinThemeId,
+  type EmotionTheme,
+  type ReplyStyleTheme,
+  type ThemeCatalog,
+} from "@/features/ai/theme-packs";
+import { confirm } from "@/components/ui/confirm";
 
 type Strength = "low" | "medium" | "high";
 
@@ -52,9 +63,7 @@ type BaseConfig = {
   isMultimodal?: boolean;
   enableMediaRecognition: boolean;
   ignorePrivateChat: boolean;
-  temperature: number;
   historyCount: number;
-  maxIterations: number;
   providersManaged?: boolean;
 };
 
@@ -119,6 +128,11 @@ type EmotionConfig = {
 
 type PersonalizationConfig = {
   persona: string;
+  replyStyleTheme: string;
+  emotionTheme: string;
+  pseudoHuman: {
+    enabled: boolean;
+  };
   emotion: EmotionConfig;
   replyStyle: {
     baseStyle: string;
@@ -228,9 +242,7 @@ const configTabs = [
 const emptyBaseConfig: BaseConfig = {
   enableMediaRecognition: true,
   ignorePrivateChat: true,
-  temperature: 0.8,
   historyCount: 100,
-  maxIterations: 20,
 };
 
 const emptySettingsConfig: SettingsConfig = {
@@ -288,6 +300,11 @@ const emptySettingsConfig: SettingsConfig = {
 
 const emptyPersonalizationConfig: PersonalizationConfig = {
   persona: "",
+  replyStyleTheme: "",
+  emotionTheme: "",
+  pseudoHuman: {
+    enabled: false,
+  },
   emotion: {
     defaultEmotion: "default",
     updateIntervalMs: 3600000,
@@ -360,6 +377,55 @@ function sanitizeSettingsForSave(settings: SettingsConfig): SettingsConfig {
   };
 }
 
+function cloneEmotionEntries(
+  emotions: Record<string, { examples: string[] }>,
+): Record<string, { examples: string[] }> {
+  const next: Record<string, { examples: string[] }> = {};
+  for (const [name, entry] of Object.entries(emotions || {})) {
+    next[name] = { examples: [...(entry.examples || [])] };
+  }
+  return next;
+}
+
+function buildThemesForSave(
+  themes: ThemeCatalog,
+  personalization: PersonalizationConfig,
+): { reply: ReplyStyleTheme[]; emotion: EmotionTheme[] } {
+  const reply = themes.reply
+    .filter((theme) => !theme.builtin)
+    .map((theme) => ({ ...theme, multipleStyles: [...theme.multipleStyles] }));
+  const emotion = themes.emotion
+    .filter((theme) => !theme.builtin)
+    .map((theme) => ({
+      ...theme,
+      emotions: cloneEmotionEntries(theme.emotions),
+    }));
+
+  const replyId = personalization.replyStyleTheme;
+  if (replyId && !isBuiltinThemeId(replyId)) {
+    const target = reply.find((theme) => theme.id === replyId);
+    if (target) {
+      target.persona = personalization.persona;
+      target.baseStyle = personalization.replyStyle.baseStyle;
+      target.multipleStyles = [...personalization.replyStyle.multipleStyles];
+      target.multipleProbability =
+        personalization.replyStyle.multipleProbability;
+    }
+  }
+
+  const emotionId = personalization.emotionTheme;
+  if (emotionId && !isBuiltinThemeId(emotionId)) {
+    const target = emotion.find((theme) => theme.id === emotionId);
+    if (target) {
+      target.defaultEmotion = personalization.emotion.defaultEmotion;
+      target.updateIntervalMs = personalization.emotion.updateIntervalMs;
+      target.emotions = cloneEmotionEntries(personalization.emotion.emotions);
+    }
+  }
+
+  return { reply, emotion };
+}
+
 function normalizeEmotionConfig(value: unknown): EmotionConfig {
   const source = (
     value && typeof value === "object" ? value : {}
@@ -408,6 +474,11 @@ function sanitizePersonalizationForSave(
 ): PersonalizationConfig {
   return {
     ...personalization,
+    replyStyleTheme: String(personalization.replyStyleTheme || "").trim(),
+    emotionTheme: String(personalization.emotionTheme || "").trim(),
+    pseudoHuman: {
+      enabled: Boolean(personalization.pseudoHuman?.enabled),
+    },
     emotion: normalizeEmotionConfig(personalization.emotion),
     replyStyle: {
       ...personalization.replyStyle,
@@ -436,6 +507,14 @@ export function AIConfigPage() {
   );
   const [settings, setSettings] = useState<SettingsConfig>(emptySettingsConfig);
   const [memory, setMemory] = useState<MemoryConfig>(emptyMemoryConfig);
+  const [themes, setThemes] = useState<ThemeCatalog>(EMPTY_THEME_CATALOG);
+  const [editingReplyTheme, setEditingReplyTheme] = useState(false);
+  const [editingEmotionTheme, setEditingEmotionTheme] = useState(false);
+  const inlinePersonalizationRef = useRef<{
+    persona: string;
+    replyStyle: PersonalizationConfig["replyStyle"];
+    emotion: EmotionConfig;
+  } | null>(null);
   const [resources, setResources] = useState<AIResources>({
     instances: [],
     skills: [],
@@ -454,8 +533,8 @@ export function AIConfigPage() {
     message: "AI 设置还没有保存，确定要离开吗？",
   });
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) setLoading(true);
     try {
       const [
         baseRes,
@@ -466,6 +545,7 @@ export function AIConfigPage() {
         groupsRes,
         stickersRes,
         memoryRes,
+        themesRes,
       ] = await Promise.all([
         apiFetch<{ data: BaseConfig }>("/api/ai/base"),
         apiFetch<{ data: PersonalizationConfig }>("/api/ai/personalization"),
@@ -487,6 +567,9 @@ export function AIConfigPage() {
             data: {},
           }),
         ),
+        apiFetch<{ data: ThemeCatalog }>("/api/ai/themes").catch(() => ({
+          data: EMPTY_THEME_CATALOG,
+        })),
       ]);
 
       const nextBase = { ...emptyBaseConfig, ...(baseRes.data || {}) };
@@ -495,33 +578,64 @@ export function AIConfigPage() {
         sampleSize?: number;
         lookbackMessages?: number;
       };
+      const nextThemes = themesRes.data || EMPTY_THEME_CATALOG;
+      const rawPersonalization = personalizationRes.data || {};
+      const replyTheme = nextThemes.reply.find(
+        (theme) =>
+          theme.id === String(rawPersonalization.replyStyleTheme || "").trim(),
+      );
+      const emotionTheme = nextThemes.emotion.find(
+        (theme) =>
+          theme.id === String(rawPersonalization.emotionTheme || "").trim(),
+      );
+      const inlineReplyStyle = {
+        ...emptyPersonalizationConfig.replyStyle,
+        ...(rawPersonalization.replyStyle || {}),
+        baseStyle: normalizeEscapedNewlines(
+          rawPersonalization.replyStyle?.baseStyle || "",
+        ),
+      };
+      const inlineEmotion = normalizeEmotionConfig(rawPersonalization.emotion);
+      inlinePersonalizationRef.current = {
+        persona: normalizeEscapedNewlines(rawPersonalization.persona || ""),
+        replyStyle: inlineReplyStyle,
+        emotion: inlineEmotion,
+      };
+
       const nextPersonalization = {
         ...emptyPersonalizationConfig,
-        ...(personalizationRes.data || {}),
-        persona: normalizeEscapedNewlines(
-          personalizationRes.data?.persona || "",
-        ),
-        emotion: normalizeEmotionConfig(
-          (personalizationRes.data as Partial<PersonalizationConfig>)?.emotion,
-        ),
-        replyStyle: {
-          ...emptyPersonalizationConfig.replyStyle,
-          ...(personalizationRes.data?.replyStyle || {}),
-          baseStyle: normalizeEscapedNewlines(
-            personalizationRes.data?.replyStyle?.baseStyle || "",
-          ),
+        ...rawPersonalization,
+        persona: replyTheme
+          ? replyTheme.persona
+          : normalizeEscapedNewlines(rawPersonalization.persona || ""),
+        replyStyleTheme: replyTheme ? replyTheme.id : "",
+        emotionTheme: emotionTheme ? emotionTheme.id : "",
+        pseudoHuman: {
+          enabled: Boolean(rawPersonalization.pseudoHuman?.enabled),
         },
+        emotion: emotionTheme
+          ? {
+              defaultEmotion: emotionTheme.defaultEmotion,
+              updateIntervalMs: emotionTheme.updateIntervalMs,
+              emotions: cloneEmotionEntries(emotionTheme.emotions),
+            }
+          : inlineEmotion,
+        replyStyle: replyTheme
+          ? {
+              baseStyle: replyTheme.baseStyle,
+              multipleStyles: [...replyTheme.multipleStyles],
+              multipleProbability: replyTheme.multipleProbability,
+            }
+          : inlineReplyStyle,
         topic: {
           ...emptyPersonalizationConfig.topic,
-          ...(personalizationRes.data?.topic || {}),
+          ...(rawPersonalization.topic || {}),
         },
         emoji: {
           ...emptyPersonalizationConfig.emoji,
-          ...(personalizationRes.data?.emoji || {}),
-          characters: compactLineArray(
-            personalizationRes.data?.emoji?.characters,
-          ),
-          stickers: compactLineArray(personalizationRes.data?.emoji?.stickers),
+          ...(rawPersonalization.emoji || {}),
+          characters: compactLineArray(rawPersonalization.emoji?.characters),
+          stickers: compactLineArray(rawPersonalization.emoji?.stickers),
         },
         expression: {
           ...emptyPersonalizationConfig.expression,
@@ -561,6 +675,7 @@ export function AIConfigPage() {
       };
 
       setBase(nextBase);
+      setThemes(nextThemes);
       setPersonalization(nextPersonalization);
       setSettings(nextSettings);
       setResources({
@@ -583,10 +698,11 @@ export function AIConfigPage() {
         personalization: nextPersonalization,
         settings: nextSettings,
         memory: nextMemory,
+        themes: nextThemes,
       });
       setHasChanges(false);
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   };
 
@@ -600,12 +716,13 @@ export function AIConfigPage() {
       personalization,
       settings,
       memory,
+      themes,
     });
     setHasChanges(
       initialSnapshotRef.current.length > 0 &&
         currentSnapshot !== initialSnapshotRef.current,
     );
-  }, [base, personalization, settings, memory]);
+  }, [base, personalization, settings, memory, themes]);
 
   async function saveAll() {
     setSaving(true);
@@ -613,14 +730,13 @@ export function AIConfigPage() {
       const nextSettings = sanitizeSettingsForSave(settings);
       const nextPersonalization =
         sanitizePersonalizationForSave(personalization);
+      const nextThemes = buildThemesForSave(themes, nextPersonalization);
       const basePayload = {
         enableMediaRecognition: base.enableMediaRecognition,
         ignorePrivateChat: base.ignorePrivateChat,
-        temperature: base.temperature,
         historyCount: base.historyCount,
-        maxIterations: base.maxIterations,
       };
-      await Promise.all([
+      const [, , , , themesRes] = await Promise.all([
         apiFetch("/api/ai/base", {
           method: "PUT",
           body: JSON.stringify(basePayload),
@@ -637,19 +753,215 @@ export function AIConfigPage() {
           method: "PUT",
           body: JSON.stringify(memory),
         }),
+        apiFetch<{ data: ThemeCatalog }>("/api/ai/themes", {
+          method: "PUT",
+          body: JSON.stringify(nextThemes),
+        }),
       ]);
+      const savedThemes = themesRes?.data || themes;
       setPersonalization(nextPersonalization);
       setSettings(nextSettings);
+      setThemes(savedThemes);
       initialSnapshotRef.current = JSON.stringify({
         base,
         personalization: nextPersonalization,
         settings: nextSettings,
         memory,
+        themes: savedThemes,
       });
       setHasChanges(false);
       toast.success("设置已保存");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function persistThemeSelection(
+    replyStyleTheme: string,
+    emotionTheme: string,
+  ) {
+    await apiFetch("/api/ai/themes/selection", {
+      method: "PUT",
+      body: JSON.stringify({ replyStyleTheme, emotionTheme }),
+    });
+  }
+
+  async function applyThemeSelection(kind: "reply" | "emotion", id: string) {
+    const currentId =
+      kind === "reply"
+        ? personalization.replyStyleTheme
+        : personalization.emotionTheme;
+    if (id === currentId) return;
+
+    const exists =
+      kind === "reply"
+        ? themes.reply.some((theme) => theme.id === id)
+        : themes.emotion.some((theme) => theme.id === id);
+    if (id && !exists) return;
+
+    if (hasChanges) {
+      const ok = await confirm({
+        title: "切换主题包",
+        message: "当前有未保存的修改，切换后会丢失，确定继续吗？",
+        confirmText: "切换",
+      });
+      if (!ok) return;
+    }
+
+    const nextReplyId = kind === "reply" ? id : personalization.replyStyleTheme;
+    const nextEmotionId =
+      kind === "emotion" ? id : personalization.emotionTheme;
+    try {
+      await persistThemeSelection(nextReplyId, nextEmotionId);
+      await load({ silent: true });
+      if (kind === "reply" && isBuiltinThemeId(nextReplyId)) {
+        setEditingReplyTheme(false);
+      }
+      if (kind === "emotion" && isBuiltinThemeId(nextEmotionId)) {
+        setEditingEmotionTheme(false);
+      }
+      toast.success("主题包已切换");
+    } catch (err) {
+      toast.error(`切换主题包失败: ${err}`);
+    }
+  }
+
+  async function addTheme(
+    kind: "reply" | "emotion",
+    theme: ReplyStyleTheme | EmotionTheme,
+  ) {
+    try {
+      const custom = buildThemesForSave(themes, personalization);
+      if (kind === "reply") custom.reply.push(theme as ReplyStyleTheme);
+      else custom.emotion.push(theme as EmotionTheme);
+      await apiFetch("/api/ai/themes", {
+        method: "PUT",
+        body: JSON.stringify(custom),
+      });
+      await persistThemeSelection(
+        kind === "reply" ? theme.id : personalization.replyStyleTheme,
+        kind === "emotion" ? theme.id : personalization.emotionTheme,
+      );
+      await load({ silent: true });
+      if (kind === "reply") setEditingReplyTheme(true);
+      else setEditingEmotionTheme(true);
+      toast.success("主题包已保存");
+    } catch (err) {
+      toast.error(`保存主题包失败: ${err}`);
+    }
+  }
+
+  async function createReplyTheme(name: string) {
+    await addTheme("reply", {
+      id: createCustomThemeId(),
+      name,
+      builtin: false,
+      persona: "",
+      baseStyle: "",
+      multipleStyles: [],
+      multipleProbability: 0.2,
+    });
+  }
+
+  async function forkReplyTheme(name: string) {
+    const source = themes.reply.find(
+      (theme) => theme.id === personalization.replyStyleTheme,
+    );
+    if (!source) return;
+    await addTheme("reply", {
+      id: createCustomThemeId(),
+      name,
+      builtin: false,
+      persona: personalization.persona,
+      baseStyle: personalization.replyStyle.baseStyle,
+      multipleStyles: [...personalization.replyStyle.multipleStyles],
+      multipleProbability: personalization.replyStyle.multipleProbability,
+    });
+  }
+
+  async function createEmotionTheme(name: string) {
+    await addTheme("emotion", {
+      id: createCustomThemeId(),
+      name,
+      builtin: false,
+      defaultEmotion: "default",
+      updateIntervalMs: 60 * 60_000,
+      emotions: { default: { examples: [] } },
+    });
+  }
+
+  async function forkEmotionTheme(name: string) {
+    const source = themes.emotion.find(
+      (theme) => theme.id === personalization.emotionTheme,
+    );
+    if (!source) return;
+    await addTheme("emotion", {
+      id: createCustomThemeId(),
+      name,
+      builtin: false,
+      defaultEmotion: personalization.emotion.defaultEmotion,
+      updateIntervalMs: personalization.emotion.updateIntervalMs,
+      emotions: cloneEmotionEntries(personalization.emotion.emotions),
+    });
+  }
+
+  async function renameTheme(kind: "reply" | "emotion", name: string) {
+    const id =
+      kind === "reply"
+        ? personalization.replyStyleTheme
+        : personalization.emotionTheme;
+    if (!id || isBuiltinThemeId(id)) return;
+    try {
+      const custom = buildThemesForSave(themes, personalization);
+      const list = kind === "reply" ? custom.reply : custom.emotion;
+      const target = list.find((theme) => theme.id === id);
+      if (!target) return;
+      target.name = name;
+      await apiFetch("/api/ai/themes", {
+        method: "PUT",
+        body: JSON.stringify(custom),
+      });
+      await load({ silent: true });
+      toast.success("主题包已重命名");
+    } catch (err) {
+      toast.error(`重命名主题包失败: ${err}`);
+    }
+  }
+
+  async function deleteTheme(kind: "reply" | "emotion") {
+    const id =
+      kind === "reply"
+        ? personalization.replyStyleTheme
+        : personalization.emotionTheme;
+    if (!id || isBuiltinThemeId(id)) return;
+    const ok = await confirm({
+      title: "删除主题包",
+      message: "删除后不可恢复，确定要删除这个主题包吗？",
+      confirmText: "删除",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      const custom = buildThemesForSave(themes, personalization);
+      if (kind === "reply") {
+        custom.reply = custom.reply.filter((theme) => theme.id !== id);
+      } else {
+        custom.emotion = custom.emotion.filter((theme) => theme.id !== id);
+      }
+      await apiFetch("/api/ai/themes", {
+        method: "PUT",
+        body: JSON.stringify(custom),
+      });
+      await persistThemeSelection(
+        kind === "reply" ? "" : personalization.replyStyleTheme,
+        kind === "emotion" ? "" : personalization.emotionTheme,
+      );
+      await load({ silent: true });
+      if (kind === "reply") setEditingReplyTheme(false);
+      else setEditingEmotionTheme(false);
+      toast.success("主题包已删除");
+    } catch (err) {
+      toast.error(`删除主题包失败: ${err}`);
     }
   }
 
@@ -819,16 +1131,12 @@ export function AIConfigPage() {
   const emotionOptions = Array.from(
     new Set(["default", ...Object.keys(personalization.emotion.emotions)]),
   );
+  const replyThemeLocked = isBuiltinThemeId(personalization.replyStyleTheme);
+  const emotionThemeLocked = isBuiltinThemeId(personalization.emotionTheme);
+  const pseudoHumanEnabled = personalization.pseudoHuman.enabled;
+  const emotionDisabled = emotionThemeLocked || pseudoHumanEnabled;
 
-  const renderModelTab = () => (
-    <ProvidersModelsTab
-      temperature={base.temperature}
-      maxIterations={base.maxIterations}
-      onBaseChange={(patch) => {
-        setBase((prev) => ({ ...prev, ...patch }));
-      }}
-    />
-  );
+  const renderModelTab = () => <ProvidersModelsTab />;
 
   const renderBehaviorTab = (mode: "reply" | "tools" | "runtime") => (
     <div className="space-y-4">
@@ -1314,149 +1622,228 @@ export function AIConfigPage() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>核心人设</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Field label="角色设定" hint="直接写给模型的人设说明">
-            <Textarea
-              className="min-h-48"
-              value={personalization.persona}
-              onChange={(e) =>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1.5">
+              <CardTitle className="flex items-center gap-2">
+                <Ghost className="h-4 w-4 text-primary" />
+                伪人模式
+              </CardTitle>
+              <CardDescription>
+                使用强化的拟人提示词，让机器人更像混在群里的网友，而不是处理消息的客服。
+              </CardDescription>
+            </div>
+            <Switch
+              className="shrink-0"
+              checked={pseudoHumanEnabled}
+              onCheckedChange={(checked) =>
                 setPersonalization((prev) => ({
                   ...prev,
-                  persona: e.target.value,
+                  pseudoHuman: { enabled: checked },
                 }))
               }
             />
-          </Field>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="基础说话风格" hint="长期稳定生效的语气说明">
+          </div>
+        </CardHeader>
+      </Card>
+
+      <ThemePackSection
+        title="回复风格主题包"
+        description="人设与说话风格一起切换；选择后立即生效。内置主题包只能复制后修改。"
+        themes={themes.reply}
+        selectedId={personalization.replyStyleTheme}
+        editing={editingReplyTheme}
+        onSelect={(id) => void applyThemeSelection("reply", id)}
+        onEdit={() => setEditingReplyTheme((prev) => !prev)}
+        onCreate={(name) => void createReplyTheme(name)}
+        onFork={(name) => void forkReplyTheme(name)}
+        onRename={(name) => void renameTheme("reply", name)}
+        onDelete={() => void deleteTheme("reply")}
+      />
+
+      {editingReplyTheme ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>核心人设</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="角色设定" hint="直接写给模型的人设说明">
               <Textarea
-                className="min-h-32"
-                value={personalization.replyStyle.baseStyle}
+                className="min-h-48"
+                disabled={replyThemeLocked}
+                value={personalization.persona}
+                onChange={(e) =>
+                  setPersonalization((prev) => ({
+                    ...prev,
+                    persona: e.target.value,
+                  }))
+                }
+              />
+            </Field>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="基础说话风格" hint="长期稳定生效的语气说明">
+                <Textarea
+                  className="min-h-32"
+                  disabled={replyThemeLocked}
+                  value={personalization.replyStyle.baseStyle}
+                  onChange={(e) =>
+                    setPersonalization((prev) => ({
+                      ...prev,
+                      replyStyle: {
+                        ...prev.replyStyle,
+                        baseStyle: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="切换风格概率" hint="0 到 1，默认 0.2">
+                <NumberInput
+                  step="0.01"
+                  disabled={replyThemeLocked}
+                  value={personalization.replyStyle.multipleProbability}
+                  onValueChange={(value) => {
+                    if (value === null) return;
+                    setPersonalization((prev) => ({
+                      ...prev,
+                      replyStyle: {
+                        ...prev.replyStyle,
+                        multipleProbability: value,
+                      },
+                    }));
+                  }}
+                />
+              </Field>
+            </div>
+            <Field label="可切换风格" hint="每行一个临时风格，会按概率混入回复">
+              <Textarea
+                className="min-h-48"
+                disabled={replyThemeLocked}
+                value={arrayToLines(personalization.replyStyle.multipleStyles)}
                 onChange={(e) =>
                   setPersonalization((prev) => ({
                     ...prev,
                     replyStyle: {
                       ...prev.replyStyle,
-                      baseStyle: e.target.value,
+                      multipleStyles: linesToArray(e.target.value),
                     },
                   }))
                 }
               />
             </Field>
-            <Field label="切换风格概率" hint="0 到 1，默认 0.2">
-              <NumberInput
-                step="0.01"
-                value={personalization.replyStyle.multipleProbability}
-                onValueChange={(value) => {
-                  if (value === null) return;
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    replyStyle: {
-                      ...prev.replyStyle,
-                      multipleProbability: value,
-                    },
-                  }));
-                }}
-              />
-            </Field>
-          </div>
-          <Field label="可切换风格" hint="每行一个临时风格，会按概率混入回复">
-            <Textarea
-              className="min-h-48"
-              value={arrayToLines(personalization.replyStyle.multipleStyles)}
-              onChange={(e) =>
-                setPersonalization((prev) => ({
-                  ...prev,
-                  replyStyle: {
-                    ...prev.replyStyle,
-                    multipleStyles: linesToArray(e.target.value),
-                  },
-                }))
-              }
-            />
-          </Field>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>情绪系统</CardTitle>
+      <ThemePackSection
+        title="情绪主题包"
+        description={
+          pseudoHumanEnabled
+            ? "默认情绪、刷新间隔与各情绪参考发言一起切换；伪人模式下不生效。"
+            : "默认情绪、刷新间隔与各情绪参考发言一起切换；选择后立即生效。"
+        }
+        themes={themes.emotion}
+        selectedId={personalization.emotionTheme}
+        editing={editingEmotionTheme}
+        onSelect={(id) => void applyThemeSelection("emotion", id)}
+        onEdit={() => setEditingEmotionTheme((prev) => !prev)}
+        onCreate={(name) => void createEmotionTheme(name)}
+        onFork={(name) => void forkEmotionTheme(name)}
+        onRename={(name) => void renameTheme("emotion", name)}
+        onDelete={() => void deleteTheme("emotion")}
+      />
+
+      {editingEmotionTheme ? (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>
+                  情绪系统
+                  {pseudoHumanEnabled ? (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      伪人模式下已停用
+                    </span>
+                  ) : null}
+                </CardTitle>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={emotionDisabled}
+                onClick={addEmotion}
+              >
+                <Plus className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">添加情绪</span>
+              </Button>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={addEmotion}
-            >
-              <Plus className="h-4 w-4 sm:mr-1" />
-              <span className="hidden sm:inline">添加情绪</span>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="默认情绪" hint="参考发言为空时也会回退到默认情绪">
-              <SelectField
-                value={personalization.emotion.defaultEmotion}
-                onChange={(value) =>
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    emotion: { ...prev.emotion, defaultEmotion: value },
-                  }))
-                }
-                options={emotionOptions.map((emotionName) => ({
-                  label: emotionName,
-                  value: emotionName,
-                }))}
-              />
-            </Field>
-            <Field
-              label="情绪更新间隔 (分钟)"
-              hint="超过这个时间后，下次聊天将刷新情绪"
-            >
-              <NumberInput
-                min={1}
-                value={Math.round(
-                  personalization.emotion.updateIntervalMs / 60000,
-                )}
-                onValueChange={(value) => {
-                  if (value === null) return;
-                  setPersonalization((prev) => ({
-                    ...prev,
-                    emotion: {
-                      ...prev.emotion,
-                      updateIntervalMs: value * 60000,
-                    },
-                  }));
-                }}
-              />
-            </Field>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {Object.entries(personalization.emotion.emotions).map(
-              ([emotionName, entry], index) => (
-                <EmotionEditorCard
-                  key={`emotion-${index}-${emotionName}`}
-                  emotionName={emotionName}
-                  examples={entry.examples}
-                  isDefault={
-                    emotionName === personalization.emotion.defaultEmotion
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="默认情绪" hint="参考发言为空时也会回退到默认情绪">
+                <SelectField
+                  value={personalization.emotion.defaultEmotion}
+                  disabled={emotionDisabled}
+                  onChange={(value) =>
+                    setPersonalization((prev) => ({
+                      ...prev,
+                      emotion: { ...prev.emotion, defaultEmotion: value },
+                    }))
                   }
-                  onRename={(nextName) => renameEmotion(emotionName, nextName)}
-                  onRemove={() => removeEmotion(emotionName)}
-                  onExamplesChange={(examples) =>
-                    updateEmotionExamples(emotionName, examples)
-                  }
+                  options={emotionOptions.map((emotionName) => ({
+                    label: emotionName,
+                    value: emotionName,
+                  }))}
                 />
-              ),
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              </Field>
+              <Field
+                label="情绪更新间隔 (分钟)"
+                hint="超过这个时间后，下次聊天将刷新情绪"
+              >
+                <NumberInput
+                  min={1}
+                  disabled={emotionDisabled}
+                  value={Math.round(
+                    personalization.emotion.updateIntervalMs / 60000,
+                  )}
+                  onValueChange={(value) => {
+                    if (value === null) return;
+                    setPersonalization((prev) => ({
+                      ...prev,
+                      emotion: {
+                        ...prev.emotion,
+                        updateIntervalMs: value * 60000,
+                      },
+                    }));
+                  }}
+                />
+              </Field>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {Object.entries(personalization.emotion.emotions).map(
+                ([emotionName, entry], index) => (
+                  <EmotionEditorCard
+                    key={`emotion-${index}-${emotionName}`}
+                    disabled={emotionDisabled}
+                    emotionName={emotionName}
+                    examples={entry.examples}
+                    isDefault={
+                      emotionName === personalization.emotion.defaultEmotion
+                    }
+                    onRename={(nextName) =>
+                      renameEmotion(emotionName, nextName)
+                    }
+                    onRemove={() => removeEmotion(emotionName)}
+                    onExamplesChange={(examples) =>
+                      updateEmotionExamples(emotionName, examples)
+                    }
+                  />
+                ),
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 
@@ -2165,13 +2552,15 @@ function SelectField({
   value,
   onChange,
   options,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: Array<{ label: string; value: string }>;
+  disabled?: boolean;
 }) {
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className="w-full">
         <SelectValue placeholder="请选择" />
       </SelectTrigger>
@@ -2258,6 +2647,7 @@ function EmotionEditorCard({
   emotionName,
   examples,
   isDefault,
+  disabled,
   onRename,
   onRemove,
   onExamplesChange,
@@ -2265,6 +2655,7 @@ function EmotionEditorCard({
   emotionName: string;
   examples: string[];
   isDefault: boolean;
+  disabled?: boolean;
   onRename: (nextName: string) => void;
   onRemove: () => void;
   onExamplesChange: (examples: string[]) => void;
@@ -2276,6 +2667,7 @@ function EmotionEditorCard({
   }, [emotionName]);
 
   const commitRename = () => {
+    if (disabled) return;
     const trimmed = nameDraft.trim().toLowerCase();
     if (trimmed === emotionName) {
       setNameDraft(emotionName);
@@ -2293,6 +2685,7 @@ function EmotionEditorCard({
       <div className="mb-3 flex items-center gap-2">
         <Input
           value={nameDraft}
+          disabled={disabled}
           onChange={(event) => setNameDraft(event.target.value)}
           onBlur={commitRename}
           onKeyDown={(event) => {
@@ -2309,7 +2702,7 @@ function EmotionEditorCard({
           type="button"
           size="sm"
           variant="outline"
-          disabled={isDefault}
+          disabled={isDefault || disabled}
           onClick={onRemove}
         >
           <Trash2 className="h-4 w-4" />
@@ -2318,6 +2711,7 @@ function EmotionEditorCard({
       <Field label="角色发言参考" hint="模型会模仿参考语气">
         <Textarea
           className="min-h-32"
+          disabled={disabled}
           value={arrayToLines(examples)}
           onChange={(event) =>
             onExamplesChange(linesToArray(event.target.value))

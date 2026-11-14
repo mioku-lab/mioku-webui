@@ -147,20 +147,7 @@ const emptyForm = (): ProviderForm => ({
   enabled: true,
 });
 
-type Props = {
-  temperature: number;
-  maxIterations: number;
-  onBaseChange: (patch: {
-    temperature?: number;
-    maxIterations?: number;
-  }) => void;
-};
-
-export function ProvidersModelsTab({
-  temperature,
-  maxIterations,
-  onBaseChange,
-}: Props) {
+export function ProvidersModelsTab() {
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [roles, setRoles] = useState<RoleBindings>({
@@ -884,36 +871,6 @@ export function ProvidersModelsTab({
                 暂无模型。可对提供商点「拉模型」，或点右上角「添加模型」手动添加。
               </p>
             ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>生成参数</CardTitle>
-          <CardDescription>仍保存在 chat/base（与提供商无关）</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">温度</p>
-            <Input
-              type="number"
-              step="0.1"
-              value={temperature}
-              onChange={(e) =>
-                onBaseChange({ temperature: Number(e.target.value) })
-              }
-            />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">最大迭代次数</p>
-            <Input
-              type="number"
-              value={maxIterations}
-              onChange={(e) =>
-                onBaseChange({ maxIterations: Number(e.target.value) })
-              }
-            />
           </div>
         </CardContent>
       </Card>
